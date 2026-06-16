@@ -1,0 +1,42 @@
+import { Range, Side } from '@/constants/config';
+
+export interface MarketSummary {
+  market_date: string;
+  side: string;
+  count: number;
+  lastPrice: number;
+  firstTradeAt: string;
+  lastTradeAt: string;
+}
+
+export interface LastTradePoint {
+  time: number; // epoch ms UTC
+  createdAt?: string; // timestamp gốc từ Supabase, nếu có
+  price: number; // cents 0..100 (= xác suất %)
+}
+
+export interface BtcPoint {
+  time: number; // epoch ms UTC
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface MarketChart {
+  marketDate: string;
+  side: string;
+  range: Range;
+  from: number | null;
+  to: number | null;
+  binanceInterval: string | null;
+  lastTrade: LastTradePoint[];
+  btc: BtcPoint[];
+}
+
+export interface ChartQuery {
+  marketDate: string;
+  side: Side;
+  range?: Range;
+}
