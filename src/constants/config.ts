@@ -1,6 +1,5 @@
-// Lấy base URL backend từ env (Rule 12 — không hardcode).
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001';
+// Mặc định gọi API route cùng domain Next.js/Vercel.
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
 
 export const RANGES = ['1h', '6h', '12h', '1d', 'all'] as const;
 export type Range = (typeof RANGES)[number];
