@@ -34,7 +34,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        'z-50 min-w-[8rem] overflow-hidden rounded-md border border-slate-200 bg-white text-slate-950 shadow-md',
+        'z-50 max-h-[200px] min-w-[8rem] overflow-hidden rounded-md border border-slate-200 bg-white text-slate-950 shadow-md',
         position === 'popper' &&
           'data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1',
         className,
@@ -43,7 +43,11 @@ const SelectContent = React.forwardRef<
       {...props}
     >
       <SelectPrimitive.Viewport
-        className={cn(position === 'popper' && 'w-full min-w-[var(--radix-select-trigger-width)] p-1')}
+        className={cn(
+          'max-h-[196px] overflow-y-auto',
+          position === 'popper' &&
+            'w-full min-w-[var(--radix-select-trigger-width)] p-1',
+        )}
       >
         {children}
       </SelectPrimitive.Viewport>
