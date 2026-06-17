@@ -1,6 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { formatDate } from '@/utils/datetime';
 
 interface DateTabsProps {
@@ -22,44 +29,20 @@ function buildDateOptions(selected: string): string[] {
 }
 
 export function DateTabs({ selected, onSelect }: DateTabsProps) {
-  const [open, setOpen] = useState(false);
   const dates = useMemo(() => buildDateOptions(selected), [selected]);
 
   return (
-    <div className="date-picker">
-      <button
-        type="button"
-        className="date-picker__trigger"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span>{formatDate(selected)}</span>
-        <span aria-hidden="true">⌄</span>
-      </button>
-
-      {open && (
-        <div className="date-picker__menu" role="listbox">
-          {dates.map((date) => (
-            <button
-              key={date}
-              type="button"
-              className={`date-picker__option ${
-                date === selected ? 'is-selected' : ''
-              }`}
-              role="option"
-              aria-selected={date === selected}
-              onClick={() => {
-                onSelect(date);
-                setOpen(false);
-              }}
-            >
-              <span>{date === selected ? '✓' : ''}</span>
-              <span>{formatDate(date)}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Select value={selected} onValueChange={onSelect}>
+      <SelectTrigger className="w-[160px]">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {dates.map((date) => (
+          <SelectItem key={date} value={date}>
+            {formatDate(date)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

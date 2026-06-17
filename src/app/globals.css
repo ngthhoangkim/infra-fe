@@ -1,12 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
-  --bg: #0e1117;
-  --panel: #161b22;
-  --border: rgba(255, 255, 255, 0.08);
-  --text: #e6e8eb;
-  --muted: #9ba3b4;
+  --bg: #f6f8fb;
+  --panel: #ffffff;
+  --border: #d9e1ec;
+  --text: #000000;
+  --heading: #020617;
+  --page-title: #2563eb;
+  --table-heading: #475569;
+  --muted: #667085;
   --up: #16c784;
   --down: #ea3943;
   --accent: #3b82f6;
+  --accent-soft: #e8f1ff;
 }
 
 * {
@@ -20,23 +28,30 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
 }
 
 .container {
-  max-width: 1080px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
-  padding: 24px 16px 64px;
+  padding: 80px 16px 32px;
 }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 16px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
 .section {
-  margin-top: 24px;
+  margin-top: 16px;
+}
+
+.container > .section:first-child {
+  margin-top: 0;
 }
 
 .section__header {
@@ -49,7 +64,9 @@ body {
 }
 
 .section__title {
+  color: var(--heading);
   font-size: 16px;
+  font-weight: 700;
   margin: 0;
   display: flex;
   align-items: center;
@@ -66,25 +83,27 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .market-header__symbol {
+  color: var(--page-title);
   margin: 0;
-  font-size: 22px;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .market-header__controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .market-header__updated {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .market-header__change.is-up {
@@ -97,6 +116,7 @@ body {
 
 .filter {
   display: flex;
+  align-items: flex-end;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -104,19 +124,20 @@ body {
 .filter__field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 14px;
   color: var(--muted);
 }
 
 .filter__field input,
 .filter__field select {
-  background: var(--bg);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
-  padding: 7px 9px;
+  padding: 9px 12px;
   font-size: 14px;
+  min-height: 44px;
 }
 
 .btn {
@@ -127,6 +148,31 @@ body {
   padding: 8px 14px;
   cursor: pointer;
   font-size: 14px;
+}
+
+.btn--secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn--icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.btn--icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
 }
 
 .chart {
@@ -170,18 +216,18 @@ body {
 .table th,
 .table td {
   text-align: left;
-  padding: 10px 12px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .table th {
-  color: var(--muted);
-  font-weight: 500;
+  color: var(--table-heading);
+  font-weight: 700;
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--panel);
+  background: #f8fafc;
 }
 
 .table .num {
@@ -204,6 +250,11 @@ body {
 .badge--sell {
   background: rgba(234, 57, 67, 0.15);
   color: var(--down);
+}
+
+.badge--neutral {
+  background: rgba(155, 163, 180, 0.15);
+  color: var(--text);
 }
 
 .state {
@@ -230,7 +281,175 @@ body {
 
 .topbar__note {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.app-shell {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+}
+
+.app-shell__inner {
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+  min-height: 64px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.app-shell__brand {
+  color: var(--page-title);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 18px;
+}
+
+.app-shell__nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.app-shell__link {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  padding: 10px 16px;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.app-shell__link:hover,
+.app-shell__link.is-active {
+  border-color: var(--border);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.trade-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  background: var(--panel);
+}
+
+.segmented__item {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 7px 10px;
+  min-width: 48px;
+}
+
+.segmented__item.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.segmented__status {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0 8px;
+}
+
+.filter__actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding-top: 0;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metric__label {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.metric__value {
+  color: var(--heading);
+  font-size: 24px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.metric__value--time {
+  font-size: 14px;
+}
+
+.mono {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    monospace;
+  font-size: 14px;
+}
+
+@media (max-width: 760px) {
+  .container {
+    padding: 116px 16px 32px;
+  }
+
+  .app-shell__inner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .app-shell__nav {
+    justify-content: flex-start;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter__actions {
+    padding-top: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .date-picker {
@@ -241,7 +460,7 @@ body {
 }
 
 .date-picker__trigger {
-  background: var(--bg);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -251,7 +470,7 @@ body {
   justify-content: space-between;
   gap: 10px;
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: 14px;
   width: 100%;
   min-width: 180px;
 }
@@ -265,11 +484,11 @@ body {
   max-height: 200px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--bg);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 16px 40px rgba(16, 24, 40, 0.14);
 }
 
 .date-picker__option {
@@ -283,14 +502,14 @@ body {
   border-radius: 7px;
   color: var(--text);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   padding: 8px 10px;
   text-align: left;
 }
 
 .date-picker__option:hover,
 .date-picker__option.is-selected {
-  background: rgba(59, 130, 246, 0.18);
+  background: var(--accent-soft);
 }
 
 .toggle {
@@ -299,13 +518,13 @@ body {
 }
 
 .toggle__btn {
-  background: var(--bg);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--muted);
   padding: 7px 14px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .toggle__btn.is-active {
@@ -326,16 +545,16 @@ body {
 
 .chart-legend {
   display: flex;
-  gap: 18px;
-  margin-bottom: 10px;
-  font-size: 13px;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
   color: var(--muted);
 }
 
 .chart-legend__item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .dot {
@@ -365,12 +584,12 @@ body {
 }
 
 .poly-source input {
-  background: var(--bg);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
   padding: 7px 9px;
-  font-size: 13px;
+  font-size: 12px;
   min-width: 260px;
 }
 

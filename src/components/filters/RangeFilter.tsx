@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { RANGES, RANGE_LABELS, Range } from '@/constants/config';
 
 interface RangeFilterProps {
@@ -9,16 +10,16 @@ interface RangeFilterProps {
 
 export function RangeFilter({ value, onChange }: RangeFilterProps) {
   return (
-    <div className="toggle">
+    <div className="flex gap-2">
       {RANGES.map((range) => (
-        <button
+        <Button
           key={range}
           type="button"
-          className={`toggle__btn ${value === range ? 'is-active' : ''}`}
+          variant={value === range ? 'default' : 'outline'}
           onClick={() => onChange(range)}
         >
           {RANGE_LABELS[range]}
-        </button>
+        </Button>
       ))}
     </div>
   );

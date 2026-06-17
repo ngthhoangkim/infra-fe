@@ -9,10 +9,12 @@ interface SectionProps {
 export function Section({ title, actions, children }: SectionProps) {
   return (
     <section className="section">
-      <div className="section__header">
-        <h2 className="section__title">{title}</h2>
-        {actions && <div className="section__actions">{actions}</div>}
-      </div>
+      {actions && (
+        <div className="section__header">
+          <h2 className="section__title">{title}</h2>
+          <div className="section__actions">{actions}</div>
+        </div>
+      )}
       {children}
     </section>
   );

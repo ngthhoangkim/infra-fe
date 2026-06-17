@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button';
+
 interface ErrorStateProps {
   message: string;
   onRetry?: () => void;
@@ -8,9 +10,9 @@ export function ErrorState({ message, onRetry }: ErrorStateProps) {
     <div className="state state--error" role="alert">
       <span>{message}</span>
       {onRetry && (
-        <button type="button" className="btn" onClick={onRetry}>
+        <Button type="button" onClick={onRetry}>
           Thử lại
-        </button>
+        </Button>
       )}
     </div>
   );

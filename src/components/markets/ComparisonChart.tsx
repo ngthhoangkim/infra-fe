@@ -99,20 +99,20 @@ export function ComparisonChart({ btc, lastTrade, side, from, to }: ComparisonCh
       height: 380,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#9ba3b4',
+        textColor: '#667085',
       },
       grid: {
-        vertLines: { color: 'rgba(255,255,255,0.06)' },
-        horzLines: { color: 'rgba(255,255,255,0.06)' },
+        vertLines: { color: 'rgba(17,24,39,0.08)' },
+        horzLines: { color: 'rgba(17,24,39,0.08)' },
       },
       crosshair: {
-        vertLine: { color: 'rgba(230,232,235,0.45)', style: 2 },
-        horzLine: { color: 'rgba(230,232,235,0.45)', style: 2 },
+        vertLine: { color: 'rgba(17,24,39,0.35)', style: 2 },
+        horzLine: { color: 'rgba(17,24,39,0.35)', style: 2 },
       },
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: 'rgba(17,24,39,0.12)',
         rightOffset: 4,
         barSpacing: 6,
       },

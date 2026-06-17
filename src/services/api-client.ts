@@ -39,3 +39,26 @@ export async function apiGet<T>(
 
   return res.json() as Promise<T>;
 }
+
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  const url = `${API_BASE_URL}${path}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(
+      `Yêu cầu thất bại (${res.status}) tới ${path}${text ? `: ${text}` : ''}`,
+    );
+  }
+
+  return res.json() as Promise<T>;
+}

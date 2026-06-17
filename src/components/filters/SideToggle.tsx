@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { SIDE_LABELS, SIDES, Side } from '@/constants/config';
 
 interface SideToggleProps {
@@ -9,18 +10,17 @@ interface SideToggleProps {
 
 export function SideToggle({ value, onChange }: SideToggleProps) {
   return (
-    <div className="toggle">
+    <div className="flex gap-2">
       {SIDES.map((side) => (
-        <button
+        <Button
           key={side}
           type="button"
-          className={`toggle__btn toggle__btn--${side} ${
-            value === side ? 'is-active' : ''
-          }`}
+          size="default"
+          variant={value === side ? 'default' : 'outline'}
           onClick={() => onChange(side)}
         >
           {SIDE_LABELS[side]}
-        </button>
+        </Button>
       ))}
     </div>
   );
