@@ -35,7 +35,7 @@ export async function getKlines(params: GetKlinesParams): Promise<Kline[]> {
   return cacheWrap(cacheKey, cacheTtlSeconds(), async () => {
     const baseUrl =
       process.env.BINANCE_BASE_URL?.replace(/\/$/, '') ??
-      'https://api.binance.com';
+      'https://data-api.binance.vision';
     const search = new URLSearchParams({
       symbol: params.symbol,
       interval: params.interval,
@@ -55,7 +55,12 @@ export async function getKlines(params: GetKlinesParams): Promise<Kline[]> {
     });
 
     if (!response.ok) {
-      throw new Error('Không lấy được dữ liệu klines từ Binance');
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `Không lấy được dữ liệu klines từ Binance (${response.status})${
+          text ? `: ${text.slice(0, 300)}` : ''
+        }`,
+      );
     }
 
     const raw = (await response.json()) as RawBinanceKline[];
@@ -70,4 +75,3 @@ export async function getKlines(params: GetKlinesParams): Promise<Kline[]> {
     }));
   });
 }
-
