@@ -179,6 +179,107 @@ body {
   width: 100%;
 }
 
+.chart-shell {
+  position: relative;
+}
+
+.trade-marker-layer {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 4;
+}
+
+.trade-marker {
+  align-items: center;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.2);
+  color: #fff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  height: 34px;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: auto;
+  position: absolute;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+  transform: translate(-50%, -50%);
+  width: 34px;
+}
+
+.trade-marker--up {
+  background: #16c784;
+  border: 4px solid #10b981;
+}
+
+.trade-marker--down {
+  background: #ea3943;
+  border: 4px solid #10b981;
+}
+
+.trade-marker__pointer {
+  align-items: center;
+  background: currentColor;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  bottom: -5px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+  display: inline-flex;
+  font-size: 10px;
+  height: 18px;
+  justify-content: center;
+  position: absolute;
+  right: -5px;
+  width: 18px;
+}
+
+.trade-marker--up .trade-marker__pointer {
+  color: #16c784;
+}
+
+.trade-marker--down .trade-marker__pointer {
+  color: #ea3943;
+}
+
+.trade-marker__tooltip {
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  bottom: calc(100% + 10px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28);
+  color: #fff;
+  display: grid;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 5px;
+  left: 50%;
+  min-width: 170px;
+  opacity: 0;
+  padding: 10px 12px;
+  pointer-events: none;
+  position: absolute;
+  text-align: left;
+  text-shadow: none;
+  transform: translate(-50%, 0);
+  transition: opacity 80ms ease;
+  visibility: hidden;
+  z-index: 20;
+}
+
+.trade-marker__tooltip strong {
+  font-size: 13px;
+}
+
+.trade-marker:hover {
+  z-index: 8;
+}
+
+.trade-marker:hover .trade-marker__tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
 .ma--7 {
   color: #f0b90b;
 }
@@ -601,6 +702,32 @@ body {
 
 .poly-note.err {
   color: var(--down);
+}
+
+.market-trade-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.market-trade-controls__field {
+  color: var(--muted);
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.market-meta {
+  color: var(--muted);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.market-meta strong {
+  color: var(--heading);
 }
 
 .is-up {

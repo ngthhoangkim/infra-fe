@@ -6,11 +6,17 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { Section } from '@/components/common/Section';
 import { Spinner } from '@/components/common/Spinner';
 import { ComparisonChart } from '@/components/markets/ComparisonChart';
-import { HistoryTable } from '@/components/markets/HistoryTable';
 import { MarketHeader } from '@/components/markets/MarketHeader';
+import { TradesTable } from '@/components/trades/TradesTable';
 import { Side } from '@/constants/config';
 import { getChart } from '@/services/markets.service';
+import { resolvePolyMarket } from '@/services/poly-markets.service';
+import { getTradeAccounts, getTrades } from '@/services/trades.service';
 import { MarketChart } from '@/types/market.types';
+import { TradeAccount, TradeAccountRecord, TradeRecord } from '@/types/trade.types';
+
+type AccountFilter = 'all' | TradeAccount;
+const BTC_15M_MARKET_ID = 'btc-updown-15m';
 
 function todayDate(): string {
   const now = new Date();
@@ -23,10 +29,18 @@ function todayDate(): string {
 export default function MarketBtcPage() {
   const [marketDate, setMarketDate] = useState<string>(todayDate);
   const [side, setSide] = useState<Side>('up');
+  const [account, setAccount] = useState<AccountFilter>('all');
 
   const [chart, setChart] = useState<MarketChart | null>(null);
+  const [trades, setTrades] = useState<TradeRecord[]>([]);
+  const [accounts, setAccounts] = useState<TradeAccountRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [tradesLoading, setTradesLoading] = useState(false);
+  const [accountsLoading, setAccountsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [marketError, setMarketError] = useState<string | null>(null);
+  const [tradesError, setTradesError] = useState<string | null>(null);
 
   // Lấy last-trade từ Supabase + giá BTC từ Binance (căn cùng cửa sổ thời gian).
   const loadChart = useCallback(async () => {
@@ -47,6 +61,79 @@ export default function MarketBtcPage() {
     loadChart();
   }, [loadChart]);
 
+  const loadPolyMarket = useCallback(async () => {
+    setMarketLoading(true);
+    setMarketError(null);
+    try {
+      await resolvePolyMarket({
+        marketId: BTC_15M_MARKET_ID,
+        marketDate,
+        timestamp: timestampForMarket(marketDate),
+      });
+    } catch (e) {
+      setMarketError(
+        e instanceof Error ? e.message : 'Lỗi resolve Polymarket market',
+      );
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [marketDate]);
+
+  useEffect(() => {
+    loadPolyMarket();
+  }, [loadPolyMarket]);
+
+  const loadAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    try {
+      const data = await getTradeAccounts();
+      setAccounts(data);
+    } catch {
+      setAccounts([]);
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAccounts();
+  }, [loadAccounts]);
+
+  const loadTrades = useCallback(async () => {
+    if (chart?.from === null || chart?.to === null) {
+      setTrades([]);
+      return;
+    }
+
+    setTradesLoading(true);
+    setTradesError(null);
+    try {
+      const data = await getTrades({
+        marketId: BTC_15M_MARKET_ID,
+        account: account === 'all' ? undefined : account,
+        from:
+          typeof chart?.from === 'number'
+            ? new Date(chart.from).toISOString()
+            : `${marketDate}T00:00:00.000Z`,
+        to:
+          typeof chart?.to === 'number'
+            ? new Date(chart.to).toISOString()
+            : `${marketDate}T23:59:59.999Z`,
+        limit: 500,
+      });
+      setTrades(data);
+    } catch (e) {
+      setTrades([]);
+      setTradesError(e instanceof Error ? e.message : 'Lỗi tải dữ liệu trade');
+    } finally {
+      setTradesLoading(false);
+    }
+  }, [account, chart?.from, chart?.to, marketDate]);
+
+  useEffect(() => {
+    loadTrades();
+  }, [loadTrades]);
+
   const lastTrade = chart?.lastTrade ?? [];
   const btc = chart?.btc ?? [];
 
@@ -58,6 +145,10 @@ export default function MarketBtcPage() {
           onDateChange={setMarketDate}
           side={side}
           onSideChange={setSide}
+          account={account}
+          accounts={accounts}
+          accountsLoading={accountsLoading}
+          onAccountChange={setAccount}
         />
       </Card>
 
@@ -80,20 +171,32 @@ export default function MarketBtcPage() {
               side={side}
               from={chart?.from ?? null}
               to={chart?.to ?? null}
+              trades={trades}
             />
           )}
         </Card>
       </Section>
 
-      <Section title="Dữ liệu chi tiết Supabase">
+      <Section title="Danh sách trade">
         <Card>
-          {loading && !chart ? (
+          {marketError && <div className="poly-note err">{marketError}</div>}
+          {tradesError && <div className="poly-note err">{tradesError}</div>}
+          {tradesLoading ? (
             <Spinner />
           ) : (
-            <HistoryTable points={lastTrade} />
+            <TradesTable trades={trades} />
           )}
         </Card>
       </Section>
     </main>
   );
+}
+
+function timestampForMarket(marketDate: string): number {
+  const [year, month, day] = marketDate.split('-').map(Number);
+  if (!year || !month || !day) return Date.now();
+
+  // Until there is a time-of-day picker, resolve the demo intraday window at
+  // 03:00 UTC so seeded mock data lines up with the selected date.
+  return Date.UTC(year, month - 1, day, 3, 0, 0, 0);
 }

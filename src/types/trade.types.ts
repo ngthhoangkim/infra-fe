@@ -5,6 +5,7 @@ export type TradeOutcome = (typeof TRADE_OUTCOMES)[number];
 
 export interface TradeInput {
   marketId: string;
+  conditionId?: string;
   account: TradeAccount;
   outcome: TradeOutcome;
   price: number;
@@ -15,6 +16,7 @@ export interface TradeInput {
 export interface TradeRow {
   id: string;
   market_id: string;
+  condition_id?: string | null;
   account_id: string;
   trade_accounts?: {
     account: TradeAccount;
@@ -29,6 +31,7 @@ export interface TradeRow {
 export interface TradeRecord {
   id: string;
   marketId: string;
+  conditionId: string | null;
   accountId: string;
   account: TradeAccount;
   outcome: TradeOutcome;
@@ -41,6 +44,7 @@ export interface TradeRecord {
 export interface TradeFilters {
   account?: TradeAccount;
   marketId?: string;
+  conditionId?: string;
   outcome?: TradeOutcome;
   from?: string;
   to?: string;

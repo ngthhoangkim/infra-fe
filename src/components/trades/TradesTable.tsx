@@ -19,6 +19,7 @@ export function TradesTable({ trades }: TradesTableProps) {
             <th>Thời gian</th>
             <th>Account</th>
             <th>Market ID</th>
+            <th>Condition</th>
             <th>Outcome</th>
             <th className="num">Price</th>
             <th className="num">Amount</th>
@@ -30,6 +31,9 @@ export function TradesTable({ trades }: TradesTableProps) {
               <td>{formatTime(trade.timestamp, fullTimeOptions)}</td>
               <td>{trade.account}</td>
               <td className="mono">{trade.marketId}</td>
+              <td className="mono">
+                {trade.conditionId ? shortId(trade.conditionId) : '-'}
+              </td>
               <td>
                 <span
                   className={`badge ${
@@ -57,3 +61,7 @@ const fullTimeOptions: Intl.DateTimeFormatOptions = {
   minute: '2-digit',
   second: '2-digit',
 };
+
+function shortId(value: string): string {
+  return value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
+}

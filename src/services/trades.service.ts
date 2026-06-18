@@ -11,6 +11,7 @@ export function getTrades(filters: TradeFilters = {}): Promise<TradeRecord[]> {
   return apiGet<TradeRecord[]>('/api/trades', {
     account: filters.account,
     marketId: filters.marketId,
+    conditionId: filters.conditionId,
     outcome: filters.outcome,
     from: filters.from,
     to: filters.to,

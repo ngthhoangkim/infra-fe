@@ -6,7 +6,6 @@ import { ReactNode } from 'react';
 
 const NAV_ITEMS = [
   { href: '/dashboard/market-btc', label: 'BTC Market' },
-  { href: '/dashboard/trades', label: 'Trades' },
   { href: '/dashboard/test-trade', label: 'Test' },
 ];
 

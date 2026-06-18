@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import {
-  CandlestickData,
+  AreaData,
   ColorType,
   createChart,
   HistogramData,
@@ -12,8 +12,10 @@ import {
   WhitespaceData,
 } from 'lightweight-charts';
 import { BtcPoint, LastTradePoint } from '@/types/market.types';
+import { TradeRecord } from '@/types/trade.types';
 import { formatUtcTime } from '@/utils/datetime';
 import { Side } from '@/constants/config';
+import { formatPrice, formatUsd } from '@/utils/format';
 
 interface ComparisonChartProps {
   btc: BtcPoint[];
@@ -21,46 +23,44 @@ interface ComparisonChartProps {
   side: Side;
   from: number | null;
   to: number | null;
+  trades?: TradeRecord[];
 }
 
-/** Chuyển epoch ms -> nến OHLC, sort tăng dần + khử trùng thời gian. */
-function toCandleData(
+/** Chuyển epoch ms -> BTC area line, sort tăng dần + khử trùng thời gian. */
+function toBtcAreaData(
   points: BtcPoint[],
   from: number | null,
   to: number | null,
-): (CandlestickData | WhitespaceData)[] {
+): (AreaData | WhitespaceData)[] {
   const byTime = new Map<number, BtcPoint>();
   for (const p of points) {
     byTime.set(Math.floor(p.time / 1000), p);
   }
 
-  const candlesByTime = new Map<number, CandlestickData | WhitespaceData>(
+  const pointsByTime = new Map<number, AreaData | WhitespaceData>(
     [...byTime.entries()].map(([time, value]) => [
       time,
       {
         time: time as UTCTimestamp,
-        open: value.open,
-        high: value.high,
-        low: value.low,
-        close: value.close,
+        value: value.close,
       },
     ]),
   );
 
   if (from !== null) {
     const time = Math.floor(from / 1000);
-    if (!candlesByTime.has(time)) {
-      candlesByTime.set(time, { time: time as UTCTimestamp });
+    if (!pointsByTime.has(time)) {
+      pointsByTime.set(time, { time: time as UTCTimestamp });
     }
   }
   if (to !== null) {
     const time = Math.floor(to / 1000);
-    if (!candlesByTime.has(time)) {
-      candlesByTime.set(time, { time: time as UTCTimestamp });
+    if (!pointsByTime.has(time)) {
+      pointsByTime.set(time, { time: time as UTCTimestamp });
     }
   }
 
-  return [...candlesByTime.entries()]
+  return [...pointsByTime.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([, value]) => value);
 }
@@ -87,12 +87,114 @@ function toPolyLine(points: LastTradePoint[]): LineData[] {
     .sort((a, b) => (a.time as number) - (b.time as number));
 }
 
-export function ComparisonChart({ btc, lastTrade, side, from, to }: ComparisonChartProps) {
+interface TradeOverlayMarker {
+  id: string;
+  account: string;
+  outcome: 'up' | 'down';
+  timestamp: string;
+  price: number;
+  amount: number;
+  time: UTCTimestamp;
+  btcPrice: number;
+  polyPrice: number | null;
+  index: number;
+}
+
+function toTradeOverlayMarkers(
+  trades: TradeRecord[] = [],
+  btc: BtcPoint[],
+  lastTrade: LastTradePoint[],
+): TradeOverlayMarker[] {
+  return trades
+    .map((trade, index) => {
+      const time = Math.floor(new Date(trade.timestamp).getTime() / 1000);
+      if (!Number.isFinite(time)) return null;
+
+      return {
+        id: trade.id,
+        account: trade.account,
+        outcome: trade.outcome,
+        timestamp: trade.timestamp,
+        price: trade.price,
+        amount: trade.amount,
+        time: time as UTCTimestamp,
+        btcPrice: nearestBtcClose(time * 1000, btc) ?? Number.NaN,
+        polyPrice: nearestPolyPrice(time * 1000, lastTrade),
+        index,
+      };
+    })
+    .filter((marker): marker is TradeOverlayMarker =>
+      Boolean(marker && Number.isFinite(marker.btcPrice)),
+    )
+    .sort((a, b) => (a.time as number) - (b.time as number));
+}
+
+function nearestPolyPrice(timeMs: number, points: LastTradePoint[]): number | null {
+  let closest: LastTradePoint | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  for (const point of points) {
+    const distance = Math.abs(point.time - timeMs);
+    if (distance < closestDistance) {
+      closest = point;
+      closestDistance = distance;
+    }
+  }
+
+  return closest?.price ?? null;
+}
+
+function nearestBtcClose(timeMs: number, btc: BtcPoint[]): number | null {
+  let closest: BtcPoint | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  for (const point of btc) {
+    const distance = Math.abs(point.time - timeMs);
+    if (distance < closestDistance) {
+      closest = point;
+      closestDistance = distance;
+    }
+  }
+
+  return closest?.close ?? null;
+}
+
+function initials(account: string): string {
+  return account
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function formatTradeTime(value: string): string {
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(value));
+}
+
+export function ComparisonChart({
+  btc,
+  lastTrade,
+  side,
+  from,
+  to,
+  trades = [],
+}: ComparisonChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = containerRef.current;
+    const overlay = overlayRef.current;
     if (!container) return;
 
     const chart = createChart(container, {
@@ -116,11 +218,11 @@ export function ComparisonChart({ btc, lastTrade, side, from, to }: ComparisonCh
         rightOffset: 4,
         barSpacing: 6,
       },
-      leftPriceScale: { visible: true, borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.28 } },
+      leftPriceScale: { visible: true, borderVisible: false, scaleMargins: { top: 0.16, bottom: 0.28 } },
       rightPriceScale: {
         visible: true,
         borderVisible: false,
-        scaleMargins: { top: 0.08, bottom: 0.28 },
+        scaleMargins: { top: 0.16, bottom: 0.28 },
       },
       localization: {
         timeFormatter: (t: UTCTimestamp) =>
@@ -129,14 +231,12 @@ export function ComparisonChart({ btc, lastTrade, side, from, to }: ComparisonCh
     });
     chartRef.current = chart;
 
-    const btcSeries = chart.addCandlestickSeries({
+    const btcSeries = chart.addAreaSeries({
       priceScaleId: 'right',
-      upColor: '#16c784',
-      downColor: '#ea3943',
-      borderUpColor: '#16c784',
-      borderDownColor: '#ea3943',
-      wickUpColor: '#16c784',
-      wickDownColor: '#ea3943',
+      lineColor: '#f0b90b',
+      topColor: 'rgba(240, 185, 11, 0.28)',
+      bottomColor: 'rgba(240, 185, 11, 0.04)',
+      lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
       priceFormat: {
@@ -145,7 +245,7 @@ export function ComparisonChart({ btc, lastTrade, side, from, to }: ComparisonCh
         minMove: 1,
       },
     });
-    btcSeries.setData(toCandleData(btc, from, to));
+    btcSeries.setData(toBtcAreaData(btc, from, to));
 
     const volumeSeries = chart.addHistogramSeries({
       priceScaleId: 'volume',
@@ -178,17 +278,72 @@ export function ComparisonChart({ btc, lastTrade, side, from, to }: ComparisonCh
       chart.timeScale().fitContent();
     }
 
-    const handleResize = () =>
+    const markers = toTradeOverlayMarkers(trades, btc, lastTrade);
+    const renderTradeOverlay = () => {
+      if (!overlay) return;
+      overlay.innerHTML = '';
+      markers.forEach((marker) => {
+        const x = chart.timeScale().timeToCoordinate(marker.time);
+        const polyY =
+          marker.polyPrice === null
+            ? null
+            : polySeries.priceToCoordinate(marker.polyPrice);
+        const btcY = btcSeries.priceToCoordinate(marker.btcPrice);
+        const y =
+          polyY ??
+          btcY ??
+          Math.max(72, Math.min(240, container.clientHeight * 0.42));
+        if (x === null) return;
+
+        const spreadIndex = marker.index % 5;
+        const row = Math.floor(marker.index / 5);
+        const xOffset = (spreadIndex - 2) * 42;
+        const yOffset = -36 - row * 44 - Math.abs(spreadIndex - 2) * 6;
+
+        const bubble = document.createElement('div');
+        bubble.className = `trade-marker trade-marker--${marker.outcome}`;
+        bubble.style.left = `${x + xOffset}px`;
+        bubble.style.top = `${y + yOffset}px`;
+        bubble.textContent = initials(marker.account);
+
+        const tooltip = document.createElement('span');
+        tooltip.className = 'trade-marker__tooltip';
+        tooltip.innerHTML = `
+          <span>Time: ${formatTradeTime(marker.timestamp)}</span>
+          <span>Price: ${formatPrice(marker.price)}</span>
+          <span>Amount: ${formatUsd(marker.amount)}</span>
+        `;
+
+        const pointer = document.createElement('span');
+        pointer.className = 'trade-marker__pointer';
+        pointer.textContent = marker.outcome === 'up' ? '▲' : '▼';
+        bubble.appendChild(pointer);
+        bubble.appendChild(tooltip);
+        overlay.appendChild(bubble);
+      });
+    };
+
+    const handleResize = () => {
       chart.applyOptions({ width: container.clientWidth });
+      renderTradeOverlay();
+    };
     handleResize();
+    requestAnimationFrame(renderTradeOverlay);
     window.addEventListener('resize', handleResize);
+    chart.timeScale().subscribeVisibleTimeRangeChange(renderTradeOverlay);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      chart.timeScale().unsubscribeVisibleTimeRangeChange(renderTradeOverlay);
       chart.remove();
       chartRef.current = null;
     };
-  }, [btc, lastTrade, side, from, to]);
+  }, [btc, lastTrade, side, from, to, trades]);
 
-  return <div ref={containerRef} className="chart" />;
+  return (
+    <div className="chart-shell">
+      <div ref={containerRef} className="chart" />
+      <div ref={overlayRef} className="trade-marker-layer" />
+    </div>
+  );
 }

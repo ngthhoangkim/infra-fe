@@ -16,6 +16,7 @@ const MAX_LIMIT = 1000;
 
 interface SupabaseTradeInsert {
   market_id: string;
+  condition_id: string | null;
   account_id: string;
   outcome: TradeOutcome;
   price: number;
@@ -67,6 +68,8 @@ export async function insertTrades(trades: TradeInput[]): Promise<number> {
 
   const payload = trades.map<SupabaseTradeInsert>((trade) => ({
     market_id: trade.marketId,
+    condition_id:
+      trade.conditionId ?? conditionIdFromLegacyMarketId(trade.marketId) ?? null,
     account_id: requireAccountId(accountIds, trade.account),
     outcome: trade.outcome,
     price: trade.price,
@@ -135,7 +138,7 @@ export async function queryTrades(
   const { baseUrl, key } = getSupabaseConfig();
   const params = new URLSearchParams({
     select:
-      'id,market_id,account_id,outcome,price,amount,trade_timestamp,created_at,trade_accounts(account)',
+      'id,market_id,condition_id,account_id,outcome,price,amount,trade_timestamp,created_at,trade_accounts(account)',
     order: 'trade_timestamp.desc',
     limit: String(normalizeLimit(filters.limit)),
   });
@@ -146,6 +149,7 @@ export async function queryTrades(
     params.set('account_id', `eq.${accountId}`);
   }
   if (filters.marketId) params.set('market_id', `eq.${filters.marketId}`);
+  if (filters.conditionId) params.set('condition_id', `eq.${filters.conditionId}`);
   if (filters.outcome) params.set('outcome', `eq.${filters.outcome}`);
   if (filters.from) params.set('trade_timestamp', `gte.${toIso(filters.from, 'from')}`);
   if (filters.to) params.append('trade_timestamp', `lte.${toIso(filters.to, 'to')}`);
@@ -182,6 +186,7 @@ export function parseTradeFilters(searchParams: URLSearchParams): TradeFilters {
   return {
     account: account as TradeAccount | undefined,
     marketId: optionalString(searchParams, 'marketId'),
+    conditionId: optionalString(searchParams, 'conditionId'),
     outcome: outcome as TradeOutcome | undefined,
     from: optionalString(searchParams, 'from'),
     to: optionalString(searchParams, 'to'),
@@ -198,6 +203,8 @@ export function createTestTrade(overrides: unknown): TradeInput {
   return normalizeTradeInput(
     {
       marketId: source.marketId ?? 'test-market',
+      conditionId:
+        typeof source.conditionId === 'string' ? source.conditionId : undefined,
       account: source.account ?? 'tung',
       outcome: source.outcome ?? 'up',
       price: source.price ?? 0.5,
@@ -215,6 +222,10 @@ function normalizeTradeInput(value: unknown, index: number): TradeInput {
 
   const trade = value as Record<string, unknown>;
   const marketId = requiredString(trade.marketId, `Trade #${index + 1}: marketId`);
+  const conditionId =
+    optionalRecordString(trade.conditionId) ??
+    conditionIdFromLegacyMarketId(marketId) ??
+    undefined;
   const account = requiredString(trade.account, `Trade #${index + 1}: account`);
   const outcome = requiredString(trade.outcome, `Trade #${index + 1}: outcome`);
   const price = requiredNumber(trade.price, `Trade #${index + 1}: price`);
@@ -243,6 +254,7 @@ function normalizeTradeInput(value: unknown, index: number): TradeInput {
 
   return {
     marketId,
+    conditionId,
     account,
     outcome,
     price,
@@ -255,6 +267,7 @@ function mapTradeRow(row: TradeRow): TradeRecord {
   return {
     id: row.id,
     marketId: row.market_id,
+    conditionId: row.condition_id ?? null,
     accountId: row.account_id,
     account: row.trade_accounts?.account ?? row.account_id,
     outcome: row.outcome,
@@ -293,6 +306,12 @@ function optionalString(
 ): string | undefined {
   const value = searchParams.get(key);
   return value === null || value.trim() === '' ? undefined : value.trim();
+}
+
+function optionalRecordString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== ''
+    ? value.trim()
+    : undefined;
 }
 
 function optionalNumber(
@@ -410,4 +429,8 @@ function isTradeAccount(value: string): value is TradeAccount {
 
 function isTradeOutcome(value: string): value is TradeOutcome {
   return (TRADE_OUTCOMES as readonly string[]).includes(value);
+}
+
+function conditionIdFromLegacyMarketId(marketId: string): string | null {
+  return marketId.startsWith('0x') ? marketId : null;
 }
