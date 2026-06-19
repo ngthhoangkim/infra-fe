@@ -95,9 +95,11 @@ interface TradeOverlayMarker {
   price: number;
   amount: number;
   time: UTCTimestamp;
+  coordinateTime: UTCTimestamp;
   btcPrice: number;
   polyPrice: number | null;
   index: number;
+  stackIndex: number;
 }
 
 function toTradeOverlayMarkers(
@@ -105,7 +107,7 @@ function toTradeOverlayMarkers(
   btc: BtcPoint[],
   lastTrade: LastTradePoint[],
 ): TradeOverlayMarker[] {
-  return trades
+  const markers = trades
     .map((trade, index) => {
       const time = Math.floor(new Date(trade.timestamp).getTime() / 1000);
       if (!Number.isFinite(time)) return null;
@@ -118,15 +120,25 @@ function toTradeOverlayMarkers(
         price: trade.price,
         amount: trade.amount,
         time: time as UTCTimestamp,
+        coordinateTime: nearestChartTime(time * 1000, btc, lastTrade),
         btcPrice: nearestBtcClose(time * 1000, btc) ?? Number.NaN,
         polyPrice: nearestPolyPrice(time * 1000, lastTrade),
         index,
+        stackIndex: 0,
       };
     })
     .filter((marker): marker is TradeOverlayMarker =>
       Boolean(marker && Number.isFinite(marker.btcPrice)),
     )
     .sort((a, b) => (a.time as number) - (b.time as number));
+
+  const stackCounts = new Map<number, number>();
+  return markers.map((marker) => {
+    const bucket = Math.floor((marker.time as number) / (15 * 60));
+    const stackIndex = stackCounts.get(bucket) ?? 0;
+    stackCounts.set(bucket, stackIndex + 1);
+    return { ...marker, stackIndex };
+  });
 }
 
 function nearestPolyPrice(timeMs: number, points: LastTradePoint[]): number | null {
@@ -142,6 +154,26 @@ function nearestPolyPrice(timeMs: number, points: LastTradePoint[]): number | nu
   }
 
   return closest?.price ?? null;
+}
+
+function nearestChartTime(
+  timeMs: number,
+  btc: BtcPoint[],
+  lastTrade: LastTradePoint[],
+): UTCTimestamp {
+  const candidates = [...btc, ...lastTrade];
+  let closestTime = Math.floor(timeMs / 1000);
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  for (const point of candidates) {
+    const distance = Math.abs(point.time - timeMs);
+    if (distance < closestDistance) {
+      closestTime = Math.floor(point.time / 1000);
+      closestDistance = distance;
+    }
+  }
+
+  return closestTime as UTCTimestamp;
 }
 
 function nearestBtcClose(timeMs: number, btc: BtcPoint[]): number | null {
@@ -283,7 +315,7 @@ export function ComparisonChart({
       if (!overlay) return;
       overlay.innerHTML = '';
       markers.forEach((marker) => {
-        const x = chart.timeScale().timeToCoordinate(marker.time);
+        const x = chart.timeScale().timeToCoordinate(marker.coordinateTime);
         const polyY =
           marker.polyPrice === null
             ? null
@@ -295,15 +327,17 @@ export function ComparisonChart({
           Math.max(72, Math.min(240, container.clientHeight * 0.42));
         if (x === null) return;
 
-        const spreadIndex = marker.index % 5;
-        const row = Math.floor(marker.index / 5);
+        const spreadIndex = marker.stackIndex % 5;
+        const row = Math.floor(marker.stackIndex / 5);
         const xOffset = (spreadIndex - 2) * 42;
         const yOffset = -36 - row * 44 - Math.abs(spreadIndex - 2) * 6;
+        const left = Math.max(20, Math.min(container.clientWidth - 20, x + xOffset));
+        const top = Math.max(28, Math.min(container.clientHeight - 28, y + yOffset));
 
         const bubble = document.createElement('div');
         bubble.className = `trade-marker trade-marker--${marker.outcome}`;
-        bubble.style.left = `${x + xOffset}px`;
-        bubble.style.top = `${y + yOffset}px`;
+        bubble.style.left = `${left}px`;
+        bubble.style.top = `${top}px`;
         bubble.textContent = initials(marker.account);
 
         const tooltip = document.createElement('span');

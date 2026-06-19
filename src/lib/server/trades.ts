@@ -11,8 +11,14 @@ import {
 
 const TABLE = 'trade_orders';
 const ACCOUNTS_TABLE = 'trade_accounts';
+const PRICE_HISTORY_TABLE = 'price_history_last_trade';
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
+const CONDITION_LOOKUP_WINDOWS: Record<string, number> = {
+  'btc-updown-5m': 6 * 60 * 1000,
+  'btc-updown-15m': 16 * 60 * 1000,
+  'btc-updown-daily': 24 * 60 * 60 * 1000,
+};
 
 interface SupabaseTradeInsert {
   market_id: string;
@@ -28,6 +34,17 @@ interface AccountRow {
   id: string;
   account: TradeAccount;
   created_at?: string;
+}
+
+interface PriceHistoryConditionRow {
+  market_id?: string | null;
+  condition_id?: string | null;
+  created_at: string;
+}
+
+interface InferredMarketMapping {
+  marketId: string | null;
+  conditionId: string | null;
 }
 
 function getSupabaseConfig() {
@@ -66,16 +83,35 @@ export async function insertTrades(trades: TradeInput[]): Promise<number> {
     key,
   );
 
-  const payload = trades.map<SupabaseTradeInsert>((trade) => ({
-    market_id: trade.marketId,
-    condition_id:
-      trade.conditionId ?? conditionIdFromLegacyMarketId(trade.marketId) ?? null,
-    account_id: requireAccountId(accountIds, trade.account),
-    outcome: trade.outcome,
-    price: trade.price,
-    amount: trade.amount,
-    trade_timestamp: new Date(trade.timestamp).toISOString(),
-  }));
+  const payload = await Promise.all(
+    trades.map(async (trade) => {
+      const timestamp = new Date(trade.timestamp).toISOString();
+      const inferred = await inferMarketMappingFromLastTrade(
+        trade,
+        timestamp,
+        baseUrl,
+        key,
+      );
+      const conditionId =
+        trade.conditionId ??
+        conditionIdFromLegacyMarketId(trade.marketId) ??
+        inferred.conditionId;
+      const marketId =
+        inferred.marketId ??
+        conditionIdFromLegacyMarketId(trade.marketId) ??
+        trade.marketId;
+
+      return {
+        market_id: marketId,
+        condition_id: conditionId,
+        account_id: requireAccountId(accountIds, trade.account),
+        outcome: trade.outcome,
+        price: trade.price,
+        amount: trade.amount,
+        trade_timestamp: timestamp,
+      } satisfies SupabaseTradeInsert;
+    }),
+  );
 
   const response = await fetch(`${baseUrl}/rest/v1/${TABLE}`, {
     method: 'POST',
@@ -327,6 +363,79 @@ function optionalNumber(
 function normalizeLimit(limit: number | undefined): number {
   if (!limit || limit < 1) return DEFAULT_LIMIT;
   return Math.min(Math.floor(limit), MAX_LIMIT);
+}
+
+async function inferMarketMappingFromLastTrade(
+  trade: TradeInput,
+  timestamp: string,
+  baseUrl: string,
+  key: string,
+): Promise<InferredMarketMapping> {
+  const explicitConditionId =
+    trade.conditionId ?? conditionIdFromLegacyMarketId(trade.marketId);
+  const isFamilyMarketId = trade.marketId.startsWith('btc-updown-');
+  const windowMs = CONDITION_LOOKUP_WINDOWS[trade.marketId] ?? 16 * 60 * 1000;
+  if (!explicitConditionId && !isFamilyMarketId && !trade.marketId) {
+    return { marketId: null, conditionId: null };
+  }
+
+  const timestampMs = new Date(timestamp).getTime();
+  const from = new Date(timestampMs - windowMs).toISOString();
+  const to = new Date(timestampMs + windowMs).toISOString();
+  const params = new URLSearchParams({
+    select: 'market_id,condition_id,created_at',
+    side: `eq.${trade.outcome}`,
+    condition_id: 'not.is.null',
+    order: 'created_at.asc',
+    limit: '1000',
+  });
+
+  if (explicitConditionId) {
+    params.set('condition_id', `eq.${explicitConditionId}`);
+  } else {
+    params.set('created_at', `gte.${from}`);
+    params.append('created_at', `lte.${to}`);
+    if (!isFamilyMarketId && !conditionIdFromLegacyMarketId(trade.marketId)) {
+      params.set('market_id', `eq.${trade.marketId}`);
+    }
+  }
+
+  const response = await fetch(
+    `${baseUrl}/rest/v1/${PRICE_HISTORY_TABLE}?${params}`,
+    {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    },
+  );
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(
+      `Lỗi lookup condition_id (${response.status})${text ? `: ${text}` : ''}`,
+    );
+  }
+
+  const rows = (await response.json()) as PriceHistoryConditionRow[];
+  let closest: PriceHistoryConditionRow | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  for (const row of rows) {
+    if (!row.market_id || !row.condition_id) continue;
+    const distance = Math.abs(new Date(row.created_at).getTime() - timestampMs);
+    if (distance < closestDistance) {
+      closest = row;
+      closestDistance = distance;
+    }
+  }
+
+  return {
+    marketId: closest?.market_id ?? null,
+    conditionId: closest?.condition_id ?? null,
+  };
 }
 
 async function upsertTradeAccounts(

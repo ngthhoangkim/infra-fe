@@ -13,6 +13,8 @@ export interface LastTradePoint {
   time: number; // epoch ms UTC
   createdAt?: string; // timestamp gốc từ Supabase, nếu có
   price: number; // cents 0..100 (= xác suất %)
+  marketId?: string | null;
+  conditionId?: string | null;
 }
 
 export interface BtcPoint {
@@ -39,4 +41,6 @@ export interface ChartQuery {
   marketDate: string;
   side: Side;
   range?: Range;
+  marketId?: string;
+  conditionId?: string;
 }

@@ -4,52 +4,65 @@ import { formatPrice, formatUsd } from '@/utils/format';
 
 interface TradesTableProps {
   trades: TradeRecord[];
+  totalTrades?: number;
 }
 
-export function TradesTable({ trades }: TradesTableProps) {
+export function TradesTable({ trades, totalTrades = trades.length }: TradesTableProps) {
   if (trades.length === 0) {
-    return <div className="state">Không có dữ liệu trade cho bộ lọc này.</div>;
+    return (
+      <div className="state">
+        Không có dữ liệu trade cho bộ lọc này.
+        {totalTrades > 0 ? ` Đã lọc từ ${totalTrades} trade.` : ''}
+      </div>
+    );
   }
 
   return (
-    <div className="table-wrap table-wrap--fixed">
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Thời gian</th>
-            <th>Account</th>
-            <th>Market ID</th>
-            <th>Condition</th>
-            <th>Outcome</th>
-            <th className="num">Price</th>
-            <th className="num">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {trades.map((trade) => (
-            <tr key={trade.id}>
-              <td>{formatTime(trade.timestamp, fullTimeOptions)}</td>
-              <td>{trade.account}</td>
-              <td className="mono">{trade.marketId}</td>
-              <td className="mono">
-                {trade.conditionId ? shortId(trade.conditionId) : '-'}
-              </td>
-              <td>
-                <span
-                  className={`badge ${
-                    trade.outcome === 'up' ? 'badge--buy' : 'badge--sell'
-                  }`}
-                >
-                  {trade.outcome === 'up' ? 'Up' : 'Down'}
-                </span>
-              </td>
-              <td className="num">{formatPrice(trade.price)}</td>
-              <td className="num">{formatUsd(trade.amount)}</td>
+    <>
+      {totalTrades !== trades.length && (
+        <div className="trade-filter-summary">
+          Đang hiển thị {trades.length}/{totalTrades} trade
+        </div>
+      )}
+      <div className="table-wrap table-wrap--fixed">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Thời gian</th>
+              <th>Account</th>
+              <th>Market ID</th>
+              <th>Condition</th>
+              <th>Outcome</th>
+              <th className="num">Price</th>
+              <th className="num">Amount</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {trades.map((trade) => (
+              <tr key={trade.id}>
+                <td>{formatTime(trade.timestamp, fullTimeOptions)}</td>
+                <td>{trade.account}</td>
+                <td className="mono">{trade.marketId}</td>
+                <td className="mono">
+                  {trade.conditionId ? shortId(trade.conditionId) : '-'}
+                </td>
+                <td>
+                  <span
+                    className={`badge ${
+                      trade.outcome === 'up' ? 'badge--buy' : 'badge--sell'
+                    }`}
+                  >
+                    {trade.outcome === 'up' ? 'Up' : 'Down'}
+                  </span>
+                </td>
+                <td className="num">{formatPrice(trade.price)}</td>
+                <td className="num">{formatUsd(trade.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

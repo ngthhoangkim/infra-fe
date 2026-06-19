@@ -25,6 +25,8 @@ export interface ChartQuery {
   marketDate: string;
   side: 'up' | 'down';
   range: ChartRange;
+  marketId?: string;
+  conditionId?: string;
 }
 
 export async function getSummaries(
@@ -58,18 +60,22 @@ export async function getSummaries(
 
 export async function getChart(query: ChartQuery): Promise<MarketChart> {
   const params = new URLSearchParams({
-    select: 'created_at,price',
+    select: 'created_at,price,market_id,condition_id',
     market_date: `eq.${query.marketDate}`,
     side: `eq.${query.side}`,
     order: 'created_at.asc',
     limit: '5000',
   });
+  if (query.marketId) params.set('market_id', `eq.${query.marketId}`);
+  if (query.conditionId) params.set('condition_id', `eq.${query.conditionId}`);
 
   const rows = await queryPriceHistory(params);
   let lastTrade: LastTradePoint[] = rows.map((row) => ({
     time: new Date(row.created_at).getTime(),
     createdAt: row.created_at,
     price: Number(row.price) * PRICE_SCALE,
+    marketId: row.market_id ?? null,
+    conditionId: row.condition_id ?? null,
   }));
 
   const fixedWindow = pickFixedChartWindow(query.marketDate, query.range);
@@ -204,4 +210,3 @@ function summarize(rows: PriceHistoryRow[]): MarketSummary[] {
         : b.market_date.localeCompare(a.market_date),
     );
 }
-

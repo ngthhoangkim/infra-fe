@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
       marketDate: requireString(searchParams, 'marketDate'),
       side: side as 'up' | 'down',
       range: range as '1h' | '6h' | '12h' | '1d' | 'all',
+      marketId: optionalString(searchParams, 'marketId'),
+      conditionId: optionalString(searchParams, 'conditionId'),
     });
 
     return NextResponse.json(data);
@@ -33,4 +35,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

@@ -22,5 +22,7 @@ export function getChart(query: ChartQuery): Promise<MarketChart> {
     marketDate: query.marketDate,
     side: query.side,
     range: query.range,
+    marketId: query.marketId,
+    conditionId: query.conditionId,
   });
 }

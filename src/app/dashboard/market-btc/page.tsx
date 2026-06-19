@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/common/Card';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Section } from '@/components/common/Section';
@@ -13,7 +13,11 @@ import { getChart } from '@/services/markets.service';
 import { resolvePolyMarket } from '@/services/poly-markets.service';
 import { getTradeAccounts, getTrades } from '@/services/trades.service';
 import { MarketChart } from '@/types/market.types';
-import { TradeAccount, TradeAccountRecord, TradeRecord } from '@/types/trade.types';
+import {
+  TradeAccount,
+  TradeAccountRecord,
+  TradeRecord,
+} from '@/types/trade.types';
 
 type AccountFilter = 'all' | TradeAccount;
 const BTC_15M_MARKET_ID = 'btc-updown-15m';
@@ -30,6 +34,8 @@ export default function MarketBtcPage() {
   const [marketDate, setMarketDate] = useState<string>(todayDate);
   const [side, setSide] = useState<Side>('up');
   const [account, setAccount] = useState<AccountFilter>('all');
+  const [minPrice, setMinPrice] = useState('');
+  const [minAmount, setMinAmount] = useState('');
 
   const [chart, setChart] = useState<MarketChart | null>(null);
   const [trades, setTrades] = useState<TradeRecord[]>([]);
@@ -47,7 +53,11 @@ export default function MarketBtcPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getChart({ marketDate, side, range: '1d' });
+      const data = await getChart({
+        marketDate,
+        side,
+        range: '1d',
+      });
       setChart(data);
     } catch (e) {
       setChart(null);
@@ -109,7 +119,6 @@ export default function MarketBtcPage() {
     setTradesError(null);
     try {
       const data = await getTrades({
-        marketId: BTC_15M_MARKET_ID,
         account: account === 'all' ? undefined : account,
         from:
           typeof chart?.from === 'number'
@@ -136,6 +145,24 @@ export default function MarketBtcPage() {
 
   const lastTrade = chart?.lastTrade ?? [];
   const btc = chart?.btc ?? [];
+  const filteredTrades = useMemo(() => {
+    const priceFloor = parseNonNegativeFilter(minPrice);
+    const amountFloor = parseNonNegativeFilter(minAmount);
+
+    return trades.filter((trade) => {
+      if (priceFloor !== null && trade.price < priceFloor) return false;
+      if (amountFloor !== null && trade.amount < amountFloor) return false;
+      return true;
+    });
+  }, [minAmount, minPrice, trades]);
+
+  const hasTradeFilters =
+    account !== 'all' || minPrice !== '' || minAmount !== '';
+  const resetTradeFilters = () => {
+    setAccount('all');
+    setMinPrice('');
+    setMinAmount('');
+  };
 
   return (
     <main className="container">
@@ -149,6 +176,12 @@ export default function MarketBtcPage() {
           accounts={accounts}
           accountsLoading={accountsLoading}
           onAccountChange={setAccount}
+          minPrice={minPrice}
+          onMinPriceChange={setMinPrice}
+          minAmount={minAmount}
+          onMinAmountChange={setMinAmount}
+          hasTradeFilters={hasTradeFilters}
+          onResetTradeFilters={resetTradeFilters}
         />
       </Card>
 
@@ -171,7 +204,7 @@ export default function MarketBtcPage() {
               side={side}
               from={chart?.from ?? null}
               to={chart?.to ?? null}
-              trades={trades}
+              trades={filteredTrades}
             />
           )}
         </Card>
@@ -184,12 +217,19 @@ export default function MarketBtcPage() {
           {tradesLoading ? (
             <Spinner />
           ) : (
-            <TradesTable trades={trades} />
+            <TradesTable trades={filteredTrades} totalTrades={trades.length} />
           )}
         </Card>
       </Section>
     </main>
   );
+}
+
+function parseNonNegativeFilter(value: string): number | null {
+  if (value.trim() === '') return null;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function timestampForMarket(marketDate: string): number {

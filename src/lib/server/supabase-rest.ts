@@ -2,6 +2,8 @@ const TABLE = 'price_history_last_trade';
 
 export interface PriceHistoryRow {
   market_date: string;
+  market_id?: string | null;
+  condition_id?: string | null;
   side: 'up' | 'down' | string;
   price: number | string;
   created_at: string;
@@ -46,4 +48,3 @@ export async function queryPriceHistory(
 
   return (await response.json()) as PriceHistoryRow[];
 }
-

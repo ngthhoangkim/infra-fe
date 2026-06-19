@@ -1,5 +1,7 @@
 import { DateTabs } from '@/components/filters/DateTabs';
 import { SideToggle } from '@/components/filters/SideToggle';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -22,6 +24,12 @@ interface MarketHeaderProps {
   accounts: TradeAccountRecord[];
   accountsLoading: boolean;
   onAccountChange: (account: AccountFilter) => void;
+  minPrice: string;
+  onMinPriceChange: (value: string) => void;
+  minAmount: string;
+  onMinAmountChange: (value: string) => void;
+  hasTradeFilters: boolean;
+  onResetTradeFilters: () => void;
 }
 
 export function MarketHeader({
@@ -33,6 +41,12 @@ export function MarketHeader({
   accounts,
   accountsLoading,
   onAccountChange,
+  minPrice,
+  onMinPriceChange,
+  minAmount,
+  onMinAmountChange,
+  hasTradeFilters,
+  onResetTradeFilters,
 }: MarketHeaderProps) {
   return (
     <div className="market-header">
@@ -58,6 +72,33 @@ export function MarketHeader({
             ))}
           </SelectContent>
         </Select>
+        <Input
+          value={minPrice}
+          type="number"
+          min="0"
+          step="0.01"
+          className="w-[120px]"
+          placeholder="Min price"
+          onChange={(event) => onMinPriceChange(event.target.value)}
+        />
+        <Input
+          value={minAmount}
+          type="number"
+          min="0"
+          step="0.01"
+          className="w-[130px]"
+          placeholder="Min amount"
+          onChange={(event) => onMinAmountChange(event.target.value)}
+        />
+        {hasTradeFilters && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onResetTradeFilters}
+          >
+            Reset
+          </Button>
+        )}
         <DateTabs selected={marketDate} onSelect={onDateChange} />
       </div>
     </div>
