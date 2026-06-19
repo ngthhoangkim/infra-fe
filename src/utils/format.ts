@@ -13,12 +13,10 @@ export function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US').format(value);
 }
 
-/** Format số tiền USD với ký hiệu $. */
+/** Format amount với 2 chữ số thập phân. */
 export function formatUsd(value: number): string {
   if (!Number.isFinite(value)) return '-';
   return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
