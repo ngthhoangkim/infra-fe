@@ -11,11 +11,14 @@ import {
   UTCTimestamp,
   WhitespaceData,
 } from 'lightweight-charts';
+import type { Time } from 'lightweight-charts';
 import { BtcPoint, LastTradePoint } from '@/types/market.types';
 import { TradeRecord } from '@/types/trade.types';
-import { formatUtcTime } from '@/utils/datetime';
+import { formatTime } from '@/utils/datetime';
 import { Side } from '@/constants/config';
 import { formatPrice, formatUsd } from '@/utils/format';
+
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 interface ComparisonChartProps {
   btc: BtcPoint[];
@@ -34,7 +37,7 @@ function toBtcAreaData(
 ): (AreaData | WhitespaceData)[] {
   const byTime = new Map<number, BtcPoint>();
   for (const p of points) {
-    byTime.set(Math.floor(p.time / 1000), p);
+    byTime.set(toVietnamChartTime(p.time), p);
   }
 
   const pointsByTime = new Map<number, AreaData | WhitespaceData>(
@@ -48,27 +51,42 @@ function toBtcAreaData(
   );
 
   if (from !== null) {
-    const time = Math.floor(from / 1000);
+    const time = toVietnamChartTime(from);
     if (!pointsByTime.has(time)) {
       pointsByTime.set(time, { time: time as UTCTimestamp });
     }
   }
   if (to !== null) {
-    const time = Math.floor(to / 1000);
+    const time = toVietnamChartTime(to);
     if (!pointsByTime.has(time)) {
       pointsByTime.set(time, { time: time as UTCTimestamp });
     }
   }
-
   return [...pointsByTime.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([, value]) => value);
 }
 
+function toTradeAnchorData(trades: TradeRecord[] = []): LineData[] {
+  const times = new Set<number>();
+
+  for (const trade of trades) {
+    const timeMs = new Date(trade.tradeTimestamp).getTime();
+    if (Number.isFinite(timeMs)) times.add(toVietnamChartTime(timeMs));
+  }
+
+  return [...times]
+    .sort((a, b) => a - b)
+    .map((time) => ({
+      time: time as UTCTimestamp,
+      value: 0,
+    }));
+}
+
 function toVolumeData(points: BtcPoint[]): HistogramData[] {
   return points
     .map((point) => ({
-      time: Math.floor(point.time / 1000) as UTCTimestamp,
+      time: toVietnamChartTime(point.time) as UTCTimestamp,
       value: point.volume,
       color:
         point.close >= point.open
@@ -81,7 +99,7 @@ function toVolumeData(points: BtcPoint[]): HistogramData[] {
 function toPolyLine(points: LastTradePoint[]): LineData[] {
   return points
     .map((p) => ({
-      time: Math.floor(p.time / 1000) as UTCTimestamp,
+      time: toVietnamChartTime(p.time) as UTCTimestamp,
       value: p.price,
     }))
     .sort((a, b) => (a.time as number) - (b.time as number));
@@ -95,7 +113,6 @@ interface TradeOverlayMarker {
   price: number;
   amount: number;
   time: UTCTimestamp;
-  coordinateTime: UTCTimestamp;
   btcPrice: number;
   polyPrice: number | null;
   index: number;
@@ -109,20 +126,19 @@ function toTradeOverlayMarkers(
 ): TradeOverlayMarker[] {
   const markers = trades
     .map((trade, index) => {
-      const time = Math.floor(new Date(trade.timestamp).getTime() / 1000);
-      if (!Number.isFinite(time)) return null;
+      const timeMs = new Date(trade.tradeTimestamp).getTime();
+      if (!Number.isFinite(timeMs)) return null;
 
       return {
         id: trade.id,
         account: trade.account,
         outcome: trade.outcome,
-        timestamp: trade.timestamp,
+        timestamp: trade.tradeTimestamp,
         price: trade.price,
         amount: trade.amount,
-        time: time as UTCTimestamp,
-        coordinateTime: nearestChartTime(time * 1000, btc, lastTrade),
-        btcPrice: nearestBtcClose(time * 1000, btc) ?? Number.NaN,
-        polyPrice: nearestPolyPrice(time * 1000, lastTrade),
+        time: toVietnamChartTime(timeMs) as UTCTimestamp,
+        btcPrice: nearestBtcClose(timeMs, btc) ?? Number.NaN,
+        polyPrice: nearestPolyPrice(timeMs, lastTrade),
         index,
         stackIndex: 0,
       };
@@ -156,26 +172,6 @@ function nearestPolyPrice(timeMs: number, points: LastTradePoint[]): number | nu
   return closest?.price ?? null;
 }
 
-function nearestChartTime(
-  timeMs: number,
-  btc: BtcPoint[],
-  lastTrade: LastTradePoint[],
-): UTCTimestamp {
-  const candidates = [...btc, ...lastTrade];
-  let closestTime = Math.floor(timeMs / 1000);
-  let closestDistance = Number.POSITIVE_INFINITY;
-
-  for (const point of candidates) {
-    const distance = Math.abs(point.time - timeMs);
-    if (distance < closestDistance) {
-      closestTime = Math.floor(point.time / 1000);
-      closestDistance = distance;
-    }
-  }
-
-  return closestTime as UTCTimestamp;
-}
-
 function nearestBtcClose(timeMs: number, btc: BtcPoint[]): number | null {
   let closest: BtcPoint | null = null;
   let closestDistance = Number.POSITIVE_INFINITY;
@@ -202,14 +198,33 @@ function initials(account: string): string {
 }
 
 function formatTradeTime(value: string): string {
-  return new Intl.DateTimeFormat('vi-VN', {
+  return formatTime(value, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-  }).format(new Date(value));
+  });
+}
+
+function toVietnamChartTime(epochMs: number): number {
+  return Math.floor((epochMs + VIETNAM_OFFSET_MS) / 1000);
+}
+
+function formatChartTime(value: number): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+
+  const hour = String(date.getUTCHours()).padStart(2, '0');
+  const minute = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${hour}:${minute}`;
+}
+
+function chartTimeToMs(time: Time): number {
+  if (typeof time === 'number') return time * 1000;
+  if (typeof time === 'string') return new Date(`${time}T00:00:00Z`).getTime();
+  return Date.UTC(time.year, time.month - 1, time.day);
 }
 
 export function ComparisonChart({
@@ -249,6 +264,7 @@ export function ComparisonChart({
         borderColor: 'rgba(17,24,39,0.12)',
         rightOffset: 4,
         barSpacing: 6,
+        tickMarkFormatter: (time: Time) => formatChartTime(chartTimeToMs(time)),
       },
       leftPriceScale: { visible: true, borderVisible: false, scaleMargins: { top: 0.16, bottom: 0.28 } },
       rightPriceScale: {
@@ -258,7 +274,7 @@ export function ComparisonChart({
       },
       localization: {
         timeFormatter: (t: UTCTimestamp) =>
-          formatUtcTime((t as number) * 1000),
+          formatChartTime((t as number) * 1000),
       },
     });
     chartRef.current = chart;
@@ -301,38 +317,72 @@ export function ComparisonChart({
     });
     polySeries.setData(toPolyLine(lastTrade));
 
+    const tradeAnchorSeries = chart.addLineSeries({
+      priceScaleId: 'trade-anchor',
+      color: 'rgba(0, 0, 0, 0)',
+      lineVisible: false,
+      crosshairMarkerVisible: false,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    tradeAnchorSeries.priceScale().applyOptions({ visible: false });
+    tradeAnchorSeries.setData(toTradeAnchorData(trades));
+
     if (from !== null && to !== null) {
       chart.timeScale().setVisibleRange({
-        from: Math.floor(from / 1000) as UTCTimestamp,
-        to: Math.floor(to / 1000) as UTCTimestamp,
+        from: toVietnamChartTime(from) as UTCTimestamp,
+        to: toVietnamChartTime(to) as UTCTimestamp,
       });
     } else {
       chart.timeScale().fitContent();
     }
 
+    let disposed = false;
     const markers = toTradeOverlayMarkers(trades, btc, lastTrade);
+
+    // Map Amount của trade vào dải giá poly (last trade) để chiều cao chấm phản
+    // ánh độ lớn: amount nhỏ nhất nằm sát đáy dải giá, lớn nhất sát đỉnh.
+    const polyPrices = lastTrade.map((p) => p.price).filter(Number.isFinite);
+    const minPoly = polyPrices.length ? Math.min(...polyPrices) : 0;
+    const maxPoly = polyPrices.length ? Math.max(...polyPrices) : 0;
+    const amounts = markers.map((m) => m.amount);
+    const minAmount = amounts.length ? Math.min(...amounts) : 0;
+    const maxAmount = amounts.length ? Math.max(...amounts) : 0;
+    const amountToPolyPrice = (amount: number) => {
+      const ratio =
+        maxAmount > minAmount ? (amount - minAmount) / (maxAmount - minAmount) : 1;
+      return minPoly + ratio * (maxPoly - minPoly);
+    };
+
     const renderTradeOverlay = () => {
-      if (!overlay) return;
+      // rAF/subscription có thể fire sau khi chart đã bị remove (StrictMode
+      // mount/unmount kép) -> truy cập chart đã dispose sẽ throw.
+      if (disposed || !overlay) return;
       overlay.innerHTML = '';
+      // timeToCoordinate trả x tính từ mép trái vùng vẽ (sau trục giá trái),
+      // còn overlay phủ cả container -> phải cộng bù bề rộng trục giá trái.
+      const leftAxisWidth = chart.priceScale('left').width();
       markers.forEach((marker) => {
-        const x = chart.timeScale().timeToCoordinate(marker.coordinateTime);
-        const polyY =
-          marker.polyPrice === null
-            ? null
-            : polySeries.priceToCoordinate(marker.polyPrice);
-        const btcY = btcSeries.priceToCoordinate(marker.btcPrice);
-        const y =
-          polyY ??
-          btcY ??
-          Math.max(72, Math.min(240, container.clientHeight * 0.42));
+        const x = chart.timeScale().timeToCoordinate(marker.time);
         if (x === null) return;
 
-        const spreadIndex = marker.stackIndex % 5;
-        const row = Math.floor(marker.stackIndex / 5);
-        const xOffset = (spreadIndex - 2) * 42;
-        const yOffset = -36 - row * 44 - Math.abs(spreadIndex - 2) * 6;
-        const left = Math.max(20, Math.min(container.clientWidth - 20, x + xOffset));
-        const top = Math.max(28, Math.min(container.clientHeight - 28, y + yOffset));
+        const axisY = container.clientHeight - 48;
+        const left = Math.max(
+          20,
+          Math.min(container.clientWidth - 20, leftAxisWidth + x),
+        );
+        // Chiều cao theo Amount, neo vào trục giá poly/last trade (trục trái).
+        const amountY = polySeries.priceToCoordinate(
+          amountToPolyPrice(marker.amount) as Parameters<
+            typeof polySeries.priceToCoordinate
+          >[0],
+        );
+        const baseY = amountY ?? axisY;
+        // Nudge nhẹ khi nhiều trade trùng khung thời gian để không chồng khít.
+        const top = Math.max(
+          28,
+          Math.min(axisY, baseY - marker.stackIndex * 20),
+        );
 
         const bubble = document.createElement('div');
         bubble.className = `trade-marker trade-marker--${marker.outcome}`;
@@ -362,11 +412,13 @@ export function ComparisonChart({
       renderTradeOverlay();
     };
     handleResize();
-    requestAnimationFrame(renderTradeOverlay);
+    const rafId = requestAnimationFrame(renderTradeOverlay);
     window.addEventListener('resize', handleResize);
     chart.timeScale().subscribeVisibleTimeRangeChange(renderTradeOverlay);
 
     return () => {
+      disposed = true;
+      cancelAnimationFrame(rafId);
       window.removeEventListener('resize', handleResize);
       chart.timeScale().unsubscribeVisibleTimeRangeChange(renderTradeOverlay);
       chart.remove();

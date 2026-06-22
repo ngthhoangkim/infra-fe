@@ -229,8 +229,9 @@ body {
   font-size: 10px;
   height: 18px;
   justify-content: center;
+  left: 50%;
   position: absolute;
-  right: -5px;
+  transform: translateX(-50%);
   width: 18px;
 }
 

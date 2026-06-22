@@ -40,7 +40,7 @@ export function TradesTable({ trades, totalTrades = trades.length }: TradesTable
           <tbody>
             {trades.map((trade) => (
               <tr key={trade.id}>
-                <td>{formatTime(trade.timestamp, fullTimeOptions)}</td>
+                <td>{formatTime(trade.tradeTimestamp, fullTimeOptions)}</td>
                 <td>{trade.account}</td>
                 <td className="mono">{trade.marketId}</td>
                 <td className="mono">

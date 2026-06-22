@@ -1,4 +1,5 @@
 import { BtcPoint, LastTradePoint, MarketChart, MarketSummary } from '@/types/market.types';
+import { todayInVietnam } from '@/utils/datetime';
 import { getKlines } from './binance';
 import { PriceHistoryRow, queryPriceHistory } from './supabase-rest';
 
@@ -139,7 +140,7 @@ export async function getChart(query: ChartQuery): Promise<MarketChart> {
 }
 
 function todayDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayInVietnam();
 }
 
 function pickFixedChartWindow(
@@ -149,7 +150,7 @@ function pickFixedChartWindow(
   const [year, month, day] = marketDate.split('-').map(Number);
   if (!year || !month || !day) return null;
 
-  const from = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
+  const from = Date.UTC(year, month - 1, day, -7, 0, 0, 0);
   const span = range === 'all' ? 24 * 60 * 60 * 1000 : RANGE_MS[range];
   const endOfWindow = from + span;
   const now = Date.now();

@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { formatDate } from '@/utils/datetime';
+import { datePartsInVietnam, formatDate } from '@/utils/datetime';
 
 interface DateTabsProps {
   selected: string;
@@ -22,7 +22,7 @@ function buildDateOptions(selected: string): string[] {
   for (let i = 0; i < 120; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() - i);
-    dates.add(date.toISOString().slice(0, 10));
+    dates.add(datePartsInVietnam(date));
   }
 
   return [...dates].sort((a, b) => b.localeCompare(a));

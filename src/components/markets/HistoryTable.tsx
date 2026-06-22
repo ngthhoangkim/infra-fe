@@ -19,7 +19,7 @@ export function HistoryTable({ points }: HistoryTableProps) {
       <table className="table">
         <thead>
           <tr>
-            <th>Thời gian (UTC)</th>
+            <th>Thời gian (VN)</th>
             <th className="num">Giá (¢)</th>
             <th className="num">Xác suất</th>
           </tr>

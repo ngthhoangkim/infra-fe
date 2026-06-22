@@ -3,6 +3,7 @@ import {
   PolyMarket,
   PolyMarketId,
 } from '@/types/poly-market.types';
+import { todayInVietnam } from '@/utils/datetime';
 
 const FAMILIES_TABLE = 'poly_market_families';
 const MARKETS_TABLE = 'poly_markets';
@@ -299,7 +300,7 @@ function mapPolyMarket(row: PolyMarketRow): PolyMarket {
 }
 
 function todayDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayInVietnam();
 }
 
 function marketDateInNewYork(timestampMs: number): string {

@@ -309,6 +309,7 @@ function mapTradeRow(row: TradeRow): TradeRecord {
     outcome: row.outcome,
     price: Number(row.price),
     amount: Number(row.amount),
+    tradeTimestamp: row.trade_timestamp,
     timestamp: row.trade_timestamp,
     createdAt: row.created_at,
   };

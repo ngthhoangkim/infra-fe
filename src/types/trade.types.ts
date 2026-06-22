@@ -37,6 +37,7 @@ export interface TradeRecord {
   outcome: TradeOutcome;
   price: number;
   amount: number;
+  tradeTimestamp: string;
   timestamp: string;
   createdAt: string;
 }

@@ -18,20 +18,13 @@ import {
   TradeAccountRecord,
   TradeRecord,
 } from '@/types/trade.types';
+import { todayInVietnam } from '@/utils/datetime';
 
 type AccountFilter = 'all' | TradeAccount;
 const BTC_15M_MARKET_ID = 'btc-updown-15m';
 
-function todayDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 export default function MarketBtcPage() {
-  const [marketDate, setMarketDate] = useState<string>(todayDate);
+  const [marketDate, setMarketDate] = useState<string>(todayInVietnam);
   const [side, setSide] = useState<Side>('up');
   const [account, setAccount] = useState<AccountFilter>('all');
   const [minPrice, setMinPrice] = useState('');
@@ -237,6 +230,6 @@ function timestampForMarket(marketDate: string): number {
   if (!year || !month || !day) return Date.now();
 
   // Until there is a time-of-day picker, resolve the demo intraday window at
-  // 03:00 UTC so seeded mock data lines up with the selected date.
+  // 10:00 Vietnam time so seeded mock data lines up with the selected date.
   return Date.UTC(year, month - 1, day, 3, 0, 0, 0);
 }
