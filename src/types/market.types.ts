@@ -1,4 +1,4 @@
-import { Range, Side } from '@/constants/config';
+import { HistoryMode, Range, Side } from '@/constants/config';
 
 export interface MarketSummary {
   market_date: string;
@@ -30,6 +30,8 @@ export interface MarketChart {
   marketDate: string;
   side: string;
   range: Range;
+  historyMode: HistoryMode;
+  conditionId?: string | null;
   from: number | null;
   to: number | null;
   binanceInterval: string | null;
@@ -41,6 +43,10 @@ export interface ChartQuery {
   marketDate: string;
   side: Side;
   range?: Range;
+  historyMode?: HistoryMode;
+  windowStartTs?: number;
   marketId?: string;
   conditionId?: string;
+  from?: string;
+  to?: string;
 }

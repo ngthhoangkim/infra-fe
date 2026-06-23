@@ -40,6 +40,8 @@ interface HistoryQuery {
   marketDate?: string;
   side?: 'up' | 'down';
   range?: '1h' | '6h' | '12h' | '1d' | 'all';
+  historyMode?: 'last_trade' | '4h';
+  windowStartTs?: number;
   interval?: string;
   startTs?: number;
   endTs?: number;
@@ -54,8 +56,18 @@ interface RawGammaMarket {
   conditionId?: string;
   clobTokenIds?: string;
   outcomes?: string;
+  eventStartTime?: string;
   startDate?: string;
   endDate?: string;
+  closed?: boolean;
+}
+
+interface RawGammaEvent {
+  markets?: RawGammaMarket[];
+  eventStartTime?: string;
+  startDate?: string;
+  endDate?: string;
+  closed?: boolean;
 }
 
 interface ResolvedMarket {
@@ -65,6 +77,7 @@ interface ResolvedMarket {
   downToken: string | null;
   startTs: number | null;
   endTs: number | null;
+  closed: boolean;
 }
 
 interface RawTrade {
@@ -89,7 +102,7 @@ export async function getPolymarketHistory(
 
   const { startTs, endTs, fidelity } = resolveWindow(query, market);
 
-  if (market?.conditionId) {
+  if (query.historyMode !== '4h' && market?.conditionId) {
     try {
       const points = await getTradesHistory(
         market.conditionId,
@@ -105,6 +118,8 @@ export async function getPolymarketHistory(
           market.conditionId,
           'data-api',
           fidelity,
+          startTs,
+          endTs,
           points,
         );
       }
@@ -127,6 +142,8 @@ export async function getPolymarketHistory(
     market?.conditionId ?? null,
     'clob',
     fidelity,
+    startTs,
+    endTs,
     points,
   );
 }
@@ -143,12 +160,13 @@ function resolveWindow(
     };
   }
 
+  const isFourHour = query.historyMode === '4h';
   const fidelityByRange: Record<NonNullable<HistoryQuery['range']>, number> = {
     '1h': 1,
     '6h': 5,
     '12h': 10,
-    '1d': 15,
-    all: 15,
+    '1d': isFourHour ? 1 : 15,
+    all: isFourHour ? 1 : 15,
   };
   const secondsByRange = {
     '1h': 3600,
@@ -157,14 +175,26 @@ function resolveWindow(
   };
 
   const now = Math.floor(Date.now() / 1000);
-  const end = query.endTs ?? market?.endTs ?? now;
+  const marketEnd =
+    market?.endTs === null || market?.endTs === undefined
+      ? undefined
+      : market.closed
+        ? market.endTs
+        : Math.min(now, market.endTs);
+  const end = query.endTs ?? marketEnd ?? now;
+  const marketStart = query.startTs ?? market?.startTs ?? undefined;
   const start =
-    query.range === '1d' || query.range === 'all'
-      ? query.startTs ?? market?.startTs ?? end - 86400
-      : (query.startTs ?? end) - secondsByRange[query.range];
+    isFourHour && query.range !== '1h'
+      ? marketStart
+      : query.range === '1d' || query.range === 'all'
+        ? marketStart ?? end - 86400
+        : Math.max(
+            marketStart ?? Number.NEGATIVE_INFINITY,
+            end - secondsByRange[query.range],
+          );
 
   return {
-    startTs: start,
+    startTs: Number.isFinite(start) ? start : undefined,
     endTs: end,
     fidelity: fidelityByRange[query.range],
   };
@@ -176,6 +206,8 @@ function wrapResult(
   conditionId: string | null,
   source: 'data-api' | 'clob',
   fidelity: number,
+  startTs: number | undefined,
+  endTs: number | undefined,
   points: PolymarketPoint[],
 ): PolymarketHistory {
   return {
@@ -184,8 +216,8 @@ function wrapResult(
     conditionId,
     source,
     fidelity,
-    from: points.length ? points[0].time : null,
-    to: points.length ? points[points.length - 1].time : null,
+    from: startTs !== undefined ? startTs * 1000 : points[0]?.time ?? null,
+    to: endTs !== undefined ? endTs * 1000 : points.at(-1)?.time ?? null,
     points,
   };
 }
@@ -312,7 +344,11 @@ async function getClobHistory(
 async function resolveMarket(
   query: HistoryQuery,
 ): Promise<ResolvedMarket | null> {
-  const slug = query.slug ?? deriveSlug(query.marketDate);
+  const slug =
+    query.slug ??
+    (query.historyMode === '4h'
+      ? deriveFourHourSlug(query.windowStartTs)
+      : deriveSlug(query.marketDate));
   if (!slug) return null;
 
   return cacheWrap(`poly:market:${slug}`, cacheTtlSeconds(), async () => {
@@ -333,14 +369,23 @@ async function resolveMarket(
       conditionId: market.conditionId ?? null,
       upToken: tokenIds[upIdx] ?? null,
       downToken: tokenIds[downIdx] ?? null,
-      startTs: market.startDate
-        ? Math.floor(new Date(market.startDate).getTime() / 1000)
+      startTs: (market.eventStartTime ?? market.startDate)
+        ? Math.floor(
+            new Date(market.eventStartTime ?? market.startDate ?? '').getTime() /
+              1000,
+          )
         : null,
       endTs: market.endDate
         ? Math.floor(new Date(market.endDate).getTime() / 1000)
         : null,
+      closed: market.closed ?? false,
     };
   });
+}
+
+function deriveFourHourSlug(windowStartTs?: number): string | null {
+  if (!windowStartTs || !Number.isInteger(windowStartTs)) return null;
+  return `btc-updown-4h-${windowStartTs}`;
 }
 
 function deriveSlug(marketDate?: string): string | null {
@@ -387,6 +432,28 @@ async function fetchGammaMarket(
 ): Promise<RawGammaMarket | undefined> {
   const baseUrl = polymarketBaseUrl('POLYMARKET_GAMMA_BASE_URL', 'gamma');
   const params = new URLSearchParams({ slug });
+  const eventResponse = await fetch(`${baseUrl}/events?${params}`, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (eventResponse.ok) {
+    const eventData = (await eventResponse.json()) as
+      | RawGammaEvent[]
+      | RawGammaEvent;
+    const event = Array.isArray(eventData) ? eventData[0] : eventData;
+    const eventMarket = event?.markets?.[0];
+    if (eventMarket?.conditionId) {
+      return {
+        ...eventMarket,
+        eventStartTime: eventMarket.eventStartTime ?? event?.eventStartTime,
+        startDate: eventMarket.startDate ?? event?.startDate,
+        endDate: eventMarket.endDate ?? event?.endDate,
+        closed: eventMarket.closed ?? event?.closed,
+      };
+    }
+  }
+
   const response = await fetch(`${baseUrl}/markets?${params}`, {
     headers: { Accept: 'application/json' },
     cache: 'no-store',
@@ -415,4 +482,3 @@ function polymarketBaseUrl(
 
   return (process.env[envName] ?? defaults[fallback]).replace(/\/$/, '');
 }
-

@@ -1,7 +1,13 @@
-const TABLE = 'price_history_last_trade';
+export type PriceHistoryTable =
+  | 'price_history_last_trade'
+  | 'price_history_4h_last_trade';
+
+const DEFAULT_TABLE: PriceHistoryTable = 'price_history_last_trade';
 
 export interface PriceHistoryRow {
-  market_date: string;
+  market_date?: string;
+  market_slug?: string;
+  window_start_ts?: number | string;
   market_id?: string | null;
   condition_id?: string | null;
   side: 'up' | 'down' | string;
@@ -28,9 +34,10 @@ function getSupabaseConfig() {
 
 export async function queryPriceHistory(
   params: URLSearchParams,
+  table: PriceHistoryTable = DEFAULT_TABLE,
 ): Promise<PriceHistoryRow[]> {
   const { baseUrl, key } = getSupabaseConfig();
-  const response = await fetch(`${baseUrl}/rest/v1/${TABLE}?${params}`, {
+  const response = await fetch(`${baseUrl}/rest/v1/${table}?${params}`, {
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,

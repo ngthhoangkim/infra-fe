@@ -21,3 +21,23 @@ export const SIDE_LABELS: Record<Side, string> = {
 };
 
 export const DEFAULT_RANGE: Range = '1d';
+
+export const HISTORY_MODES = ['last_trade', '4h'] as const;
+export type HistoryMode = (typeof HISTORY_MODES)[number];
+
+export const HISTORY_MODE_LABELS: Record<HistoryMode, string> = {
+  last_trade: 'Daily',
+  '4h': '4H',
+};
+
+export const FOUR_HOUR_SLOTS = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'] as const;
+export type FourHourSlot = (typeof FOUR_HOUR_SLOTS)[number];
+
+export const FOUR_HOUR_SLOT_LABELS: Record<FourHourSlot, string> = {
+  '00:00': '12 AM ET',
+  '04:00': '4 AM ET',
+  '08:00': '8 AM ET',
+  '12:00': '12 PM ET',
+  '16:00': '4 PM ET',
+  '20:00': '8 PM ET',
+};

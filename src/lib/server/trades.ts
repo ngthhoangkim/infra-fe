@@ -14,6 +14,7 @@ const ACCOUNTS_TABLE = 'trade_accounts';
 const PRICE_HISTORY_TABLE = 'price_history_last_trade';
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
+const VIETNAM_OFFSET_MINUTES = 7 * 60;
 const CONDITION_LOOKUP_WINDOWS: Record<string, number> = {
   'btc-updown-5m': 6 * 60 * 1000,
   'btc-updown-15m': 16 * 60 * 1000,
@@ -85,7 +86,7 @@ export async function insertTrades(trades: TradeInput[]): Promise<number> {
 
   const payload = await Promise.all(
     trades.map(async (trade) => {
-      const timestamp = new Date(trade.timestamp).toISOString();
+      const timestamp = toIso(trade.timestamp, 'timestamp');
       const inferred = await inferMarketMappingFromLastTrade(
         trade,
         timestamp,
@@ -295,7 +296,7 @@ function normalizeTradeInput(value: unknown, index: number): TradeInput {
     outcome,
     price,
     amount,
-    timestamp,
+    timestamp: toIso(timestamp, `Trade #${index + 1}: timestamp`),
   };
 }
 
@@ -526,11 +527,40 @@ function requireAccountId(
 }
 
 function toIso(value: string, label: string): string {
-  const date = new Date(value);
+  const source = value.trim();
+  const date = hasExplicitTimeZone(source)
+    ? new Date(source)
+    : parseVietnamTimestamp(source);
   if (Number.isNaN(date.getTime())) {
     throw new Error(`${label} không phải timestamp hợp lệ`);
   }
   return date.toISOString();
+}
+
+function hasExplicitTimeZone(value: string): boolean {
+  return /(?:z|[+-]\d{2}:?\d{2})$/i.test(value);
+}
+
+function parseVietnamTimestamp(value: string): Date {
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/,
+  );
+  if (!match) return new Date(Number.NaN);
+
+  const [, year, month, day, hour = '00', minute = '00', second = '00', ms = '0'] =
+    match;
+  const utcMs =
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      Number(ms.padEnd(3, '0')),
+    ) -
+    VIETNAM_OFFSET_MINUTES * 60 * 1000;
+  return new Date(utcMs);
 }
 
 function isTradeAccount(value: string): value is TradeAccount {

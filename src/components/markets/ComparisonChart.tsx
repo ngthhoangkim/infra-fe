@@ -18,7 +18,7 @@ import { formatTime } from '@/utils/datetime';
 import { Side } from '@/constants/config';
 import { formatPrice, formatUsd } from '@/utils/format';
 
-const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
+const CHART_TIME_OFFSET_MS = 0;
 
 interface ComparisonChartProps {
   btc: BtcPoint[];
@@ -97,12 +97,18 @@ function toVolumeData(points: BtcPoint[]): HistogramData[] {
 }
 
 function toPolyLine(points: LastTradePoint[]): LineData[] {
-  return points
-    .map((p) => ({
-      time: toVietnamChartTime(p.time) as UTCTimestamp,
-      value: p.price,
-    }))
-    .sort((a, b) => (a.time as number) - (b.time as number));
+  const byTime = new Map<number, LineData>();
+  for (const point of points) {
+    const time = toVietnamChartTime(point.time);
+    byTime.set(time, {
+      time: time as UTCTimestamp,
+      value: point.price,
+    });
+  }
+
+  return [...byTime.values()].sort(
+    (a, b) => (a.time as number) - (b.time as number),
+  );
 }
 
 interface TradeOverlayMarker {
@@ -209,7 +215,7 @@ function formatTradeTime(value: string): string {
 }
 
 function toVietnamChartTime(epochMs: number): number {
-  return Math.floor((epochMs + VIETNAM_OFFSET_MS) / 1000);
+  return Math.floor((epochMs + CHART_TIME_OFFSET_MS) / 1000);
 }
 
 function formatChartTime(value: number): string {

@@ -28,7 +28,7 @@ export function TradesTable({ trades, totalTrades = trades.length }: TradesTable
         <table className="table">
           <thead>
             <tr>
-              <th>Thời gian</th>
+              <th>Thời gian (UTC)</th>
               <th>Account</th>
               <th>Market ID</th>
               <th>Condition</th>

@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { datePartsInVietnam, formatDate } from '@/utils/datetime';
+import { currentDailyMarketDate, formatDate } from '@/utils/datetime';
 
 interface DateTabsProps {
   selected: string;
@@ -16,13 +16,15 @@ interface DateTabsProps {
 }
 
 function buildDateOptions(selected: string): string[] {
-  const today = new Date();
   const dates = new Set<string>([selected]);
+  const currentMarketDate = currentDailyMarketDate();
+  const [year, month, day] = currentMarketDate.split('-').map(Number);
+  const latest = new Date(Date.UTC(year, month - 1, day));
 
   for (let i = 0; i < 120; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    dates.add(datePartsInVietnam(date));
+    const date = new Date(latest);
+    date.setUTCDate(latest.getUTCDate() - i);
+    dates.add(date.toISOString().slice(0, 10));
   }
 
   return [...dates].sort((a, b) => b.localeCompare(a));

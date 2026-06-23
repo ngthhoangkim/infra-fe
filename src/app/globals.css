@@ -417,12 +417,44 @@ body {
   gap: 16px;
 }
 
+.app-shell__left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .app-shell__brand {
   color: var(--page-title);
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
   font-size: 18px;
+}
+
+.app-shell__tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  background: var(--panel);
+}
+
+.app-shell__tab {
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 6px 12px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.app-shell__tab:hover,
+.app-shell__tab.is-active {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .app-shell__nav {

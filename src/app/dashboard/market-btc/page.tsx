@@ -1,5 +1,6 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/common/Card';
 import { ErrorState } from '@/components/common/ErrorState';
@@ -8,29 +9,44 @@ import { Spinner } from '@/components/common/Spinner';
 import { ComparisonChart } from '@/components/markets/ComparisonChart';
 import { MarketHeader } from '@/components/markets/MarketHeader';
 import { TradesTable } from '@/components/trades/TradesTable';
-import { Side } from '@/constants/config';
+import { HistoryMode, Side } from '@/constants/config';
 import { getChart } from '@/services/markets.service';
 import { resolvePolyMarket } from '@/services/poly-markets.service';
 import { getTradeAccounts, getTrades } from '@/services/trades.service';
 import { MarketChart } from '@/types/market.types';
+import { PolyMarket } from '@/types/poly-market.types';
 import {
   TradeAccount,
   TradeAccountRecord,
   TradeRecord,
 } from '@/types/trade.types';
-import { todayInVietnam } from '@/utils/datetime';
+import {
+  NEW_YORK_TIME_ZONE,
+  currentDailyMarketDate,
+  datePartsInNewYork,
+  zonedTimeToUtcSeconds,
+} from '@/utils/datetime';
 
 type AccountFilter = 'all' | TradeAccount;
-const BTC_15M_MARKET_ID = 'btc-updown-15m';
+const BTC_DAILY_MARKET_ID = 'btc-updown-daily';
 
 export default function MarketBtcPage() {
-  const [marketDate, setMarketDate] = useState<string>(todayInVietnam);
+  const searchParams = useSearchParams();
+  const historyMode: HistoryMode =
+    searchParams.get('mode') === '4h' ? '4h' : 'last_trade';
+  const [marketDate, setMarketDate] = useState<string>(() =>
+    historyMode === '4h' ? datePartsInNewYork(new Date()) : currentDailyMarketDate(),
+  );
+  const [windowStartTs, setWindowStartTs] = useState<number>(() =>
+    defaultWindowStartTs(datePartsInNewYork(new Date())),
+  );
   const [side, setSide] = useState<Side>('up');
   const [account, setAccount] = useState<AccountFilter>('all');
   const [minPrice, setMinPrice] = useState('');
   const [minAmount, setMinAmount] = useState('');
 
   const [chart, setChart] = useState<MarketChart | null>(null);
+  const [polyMarket, setPolyMarket] = useState<PolyMarket | null>(null);
   const [trades, setTrades] = useState<TradeRecord[]>([]);
   const [accounts, setAccounts] = useState<TradeAccountRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,8 +56,16 @@ export default function MarketBtcPage() {
   const [error, setError] = useState<string | null>(null);
   const [marketError, setMarketError] = useState<string | null>(null);
   const [tradesError, setTradesError] = useState<string | null>(null);
+  const marketWindowFrom =
+    historyMode === 'last_trade'
+      ? (polyMarket?.windowStartAt ?? undefined)
+      : undefined;
+  const marketWindowTo =
+    historyMode === 'last_trade'
+      ? (polyMarket?.windowEndAt ?? undefined)
+      : undefined;
 
-  // Lấy last-trade từ Supabase + giá BTC từ Binance (căn cùng cửa sổ thời gian).
+  // Lấy last-trade từ Polymarket API + giá BTC từ Binance.
   const loadChart = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -50,6 +74,12 @@ export default function MarketBtcPage() {
         marketDate,
         side,
         range: '1d',
+        historyMode,
+        windowStartTs: historyMode === '4h' ? windowStartTs : undefined,
+        conditionId:
+          historyMode === 'last_trade' ? polyMarket?.conditionId : undefined,
+        from: marketWindowFrom,
+        to: marketWindowTo,
       });
       setChart(data);
     } catch (e) {
@@ -58,21 +88,38 @@ export default function MarketBtcPage() {
     } finally {
       setLoading(false);
     }
-  }, [marketDate, side]);
+  }, [
+    historyMode,
+    marketDate,
+    marketWindowFrom,
+    marketWindowTo,
+    polyMarket?.conditionId,
+    side,
+    windowStartTs,
+  ]);
 
   useEffect(() => {
     loadChart();
   }, [loadChart]);
 
   const loadPolyMarket = useCallback(async () => {
+    if (historyMode === '4h') {
+      setPolyMarket(null);
+      setMarketLoading(false);
+      setMarketError(null);
+      return;
+    }
+
     setMarketLoading(true);
     setMarketError(null);
+    setPolyMarket(null);
     try {
-      await resolvePolyMarket({
-        marketId: BTC_15M_MARKET_ID,
+      const data = await resolvePolyMarket({
+        marketId: BTC_DAILY_MARKET_ID,
         marketDate,
         timestamp: timestampForMarket(marketDate),
       });
+      setPolyMarket(data);
     } catch (e) {
       setMarketError(
         e instanceof Error ? e.message : 'Lỗi resolve Polymarket market',
@@ -80,7 +127,7 @@ export default function MarketBtcPage() {
     } finally {
       setMarketLoading(false);
     }
-  }, [marketDate]);
+  }, [historyMode, marketDate]);
 
   useEffect(() => {
     loadPolyMarket();
@@ -103,7 +150,12 @@ export default function MarketBtcPage() {
   }, [loadAccounts]);
 
   const loadTrades = useCallback(async () => {
-    if (chart?.from === null || chart?.to === null) {
+    const chartConditionId = chart?.conditionId ?? polyMarket?.conditionId;
+    if (
+      typeof chart?.from !== 'number' ||
+      typeof chart?.to !== 'number' ||
+      !chartConditionId
+    ) {
       setTrades([]);
       return;
     }
@@ -113,14 +165,10 @@ export default function MarketBtcPage() {
     try {
       const data = await getTrades({
         account: account === 'all' ? undefined : account,
-        from:
-          typeof chart?.from === 'number'
-            ? new Date(chart.from).toISOString()
-            : `${marketDate}T00:00:00.000Z`,
-        to:
-          typeof chart?.to === 'number'
-            ? new Date(chart.to).toISOString()
-            : `${marketDate}T23:59:59.999Z`,
+        conditionId: chartConditionId,
+        outcome: side,
+        from: new Date(chart.from).toISOString(),
+        to: new Date(chart.to).toISOString(),
         limit: 500,
       });
       setTrades(data);
@@ -130,7 +178,14 @@ export default function MarketBtcPage() {
     } finally {
       setTradesLoading(false);
     }
-  }, [account, chart?.from, chart?.to, marketDate]);
+  }, [
+    account,
+    chart?.from,
+    chart?.conditionId,
+    chart?.to,
+    polyMarket?.conditionId,
+    side,
+  ]);
 
   useEffect(() => {
     loadTrades();
@@ -156,13 +211,27 @@ export default function MarketBtcPage() {
     setMinPrice('');
     setMinAmount('');
   };
+  const handleDateChange = (date: string) => {
+    setMarketDate(date);
+    setWindowStartTs(defaultWindowStartTs(date));
+  };
+  const handleFourHourWindowChange = (value: {
+    marketDate: string;
+    windowStartTs: number;
+  }) => {
+    setMarketDate(value.marketDate);
+    setWindowStartTs(value.windowStartTs);
+  };
 
   return (
     <main className="container">
       <Card>
         <MarketHeader
           marketDate={marketDate}
-          onDateChange={setMarketDate}
+          onDateChange={handleDateChange}
+          historyMode={historyMode}
+          windowStartTs={windowStartTs}
+          onFourHourWindowChange={handleFourHourWindowChange}
           side={side}
           onSideChange={setSide}
           account={account}
@@ -232,4 +301,21 @@ function timestampForMarket(marketDate: string): number {
   // Until there is a time-of-day picker, resolve the demo intraday window at
   // 10:00 Vietnam time so seeded mock data lines up with the selected date.
   return Date.UTC(year, month - 1, day, 3, 0, 0, 0);
+}
+
+function defaultWindowStartTs(marketDate: string): number {
+  const now = new Date();
+  const today = datePartsInNewYork(now);
+  const hour =
+    marketDate === today ? Math.floor(hourInNewYork(now) / 4) * 4 : 0;
+  return zonedTimeToUtcSeconds(marketDate, hour, NEW_YORK_TIME_ZONE);
+}
+
+function hourInNewYork(value: Date): number {
+  const hour = new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    hourCycle: 'h23',
+    timeZone: NEW_YORK_TIME_ZONE,
+  }).format(value);
+  return Number(hour);
 }

@@ -6,12 +6,17 @@ export const dynamic = 'force-dynamic';
 
 const RANGES = new Set(['1h', '6h', '12h', '1d', 'all']);
 const SIDES = new Set(['up', 'down']);
+const HISTORY_MODES = new Set(['last_trade', '4h']);
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
     const side = optionalString(searchParams, 'side') ?? 'up';
     const range = optionalString(searchParams, 'range') ?? '1d';
+    const historyMode = optionalString(searchParams, 'historyMode') ?? 'last_trade';
+    const windowStartTsParam = optionalString(searchParams, 'windowStartTs');
+    const windowStartTs =
+      windowStartTsParam === undefined ? undefined : Number(windowStartTsParam);
 
     if (!SIDES.has(side)) {
       return jsonError('side chỉ hỗ trợ up hoặc down', 400);
@@ -19,13 +24,28 @@ export async function GET(request: NextRequest) {
     if (!RANGES.has(range)) {
       return jsonError('range không hợp lệ', 400);
     }
+    if (!HISTORY_MODES.has(historyMode)) {
+      return jsonError('historyMode không hợp lệ', 400);
+    }
+    if (
+      historyMode === '4h' &&
+      (windowStartTs === undefined ||
+        !Number.isInteger(windowStartTs) ||
+        windowStartTs <= 0)
+    ) {
+      return jsonError('windowStartTs không hợp lệ', 400);
+    }
 
     const data = await getChart({
       marketDate: requireString(searchParams, 'marketDate'),
       side: side as 'up' | 'down',
       range: range as '1h' | '6h' | '12h' | '1d' | 'all',
+      historyMode: historyMode as 'last_trade' | '4h',
+      windowStartTs,
       marketId: optionalString(searchParams, 'marketId'),
       conditionId: optionalString(searchParams, 'conditionId'),
+      from: optionalString(searchParams, 'from'),
+      to: optionalString(searchParams, 'to'),
     });
 
     return NextResponse.json(data);

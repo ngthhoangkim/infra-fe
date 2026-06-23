@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { DashboardShell } from '@/components/layout/DashboardShell';
 import './globals.css';
 
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body>
-        <DashboardShell>{children}</DashboardShell>
+        <Suspense>
+          <DashboardShell>{children}</DashboardShell>
+        </Suspense>
       </body>
     </html>
   );

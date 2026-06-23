@@ -1,4 +1,5 @@
 import { DateTabs } from '@/components/filters/DateTabs';
+import { FourHourWindowSelect } from '@/components/filters/FourHourWindowSelect';
 import { SideToggle } from '@/components/filters/SideToggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Side } from '@/constants/config';
+import { HistoryMode, Side } from '@/constants/config';
 import { TradeAccount, TradeAccountRecord } from '@/types/trade.types';
 import { formatDate } from '@/utils/datetime';
 
@@ -18,6 +19,12 @@ type AccountFilter = 'all' | TradeAccount;
 interface MarketHeaderProps {
   marketDate: string;
   onDateChange: (date: string) => void;
+  historyMode: HistoryMode;
+  windowStartTs: number;
+  onFourHourWindowChange: (value: {
+    marketDate: string;
+    windowStartTs: number;
+  }) => void;
   side: Side;
   onSideChange: (side: Side) => void;
   account: AccountFilter;
@@ -35,6 +42,9 @@ interface MarketHeaderProps {
 export function MarketHeader({
   marketDate,
   onDateChange,
+  historyMode,
+  windowStartTs,
+  onFourHourWindowChange,
   side,
   onSideChange,
   account,
@@ -99,7 +109,15 @@ export function MarketHeader({
             Reset
           </Button>
         )}
-        <DateTabs selected={marketDate} onSelect={onDateChange} />
+        {historyMode === '4h' ? (
+          <FourHourWindowSelect
+            marketDate={marketDate}
+            windowStartTs={windowStartTs}
+            onSelect={onFourHourWindowChange}
+          />
+        ) : (
+          <DateTabs selected={marketDate} onSelect={onDateChange} />
+        )}
       </div>
     </div>
   );

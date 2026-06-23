@@ -22,6 +22,11 @@ export async function GET(request: NextRequest) {
       slug: optionalString(searchParams, 'slug'),
       marketDate: optionalString(searchParams, 'marketDate'),
       side: side as 'up' | 'down' | undefined,
+      historyMode: optionalString(searchParams, 'historyMode') as
+        | 'last_trade'
+        | '4h'
+        | undefined,
+      windowStartTs: optionalNumber(searchParams, 'windowStartTs'),
       range: optionalString(searchParams, 'range') as
         | '1h'
         | '6h'
@@ -44,4 +49,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

@@ -22,7 +22,11 @@ export function getChart(query: ChartQuery): Promise<MarketChart> {
     marketDate: query.marketDate,
     side: query.side,
     range: query.range,
+    historyMode: query.historyMode,
+    windowStartTs: query.windowStartTs,
     marketId: query.marketId,
     conditionId: query.conditionId,
+    from: query.from,
+    to: query.to,
   });
 }
