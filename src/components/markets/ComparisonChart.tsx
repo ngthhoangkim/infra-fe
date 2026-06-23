@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   AreaData,
   ColorType,
@@ -244,6 +244,14 @@ export function ComparisonChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const btcAreaData = useMemo(() => toBtcAreaData(btc, from, to), [btc, from, to]);
+  const volumeData = useMemo(() => toVolumeData(btc), [btc]);
+  const polyLineData = useMemo(() => toPolyLine(lastTrade), [lastTrade]);
+  const tradeAnchorData = useMemo(() => toTradeAnchorData(trades), [trades]);
+  const tradeMarkers = useMemo(
+    () => toTradeOverlayMarkers(trades, btc, lastTrade),
+    [btc, lastTrade, trades],
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -299,7 +307,7 @@ export function ComparisonChart({
         minMove: 1,
       },
     });
-    btcSeries.setData(toBtcAreaData(btc, from, to));
+    btcSeries.setData(btcAreaData);
 
     const volumeSeries = chart.addHistogramSeries({
       priceScaleId: 'volume',
@@ -310,7 +318,7 @@ export function ComparisonChart({
     volumeSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.78, bottom: 0 },
     });
-    volumeSeries.setData(toVolumeData(btc));
+    volumeSeries.setData(volumeData);
 
     const polyColor = side === 'up' ? '#16c784' : '#ea3943';
     const polySeries = chart.addLineSeries({
@@ -321,7 +329,7 @@ export function ComparisonChart({
       lastValueVisible: false,
       title: side === 'up' ? 'Up %' : 'Down %',
     });
-    polySeries.setData(toPolyLine(lastTrade));
+    polySeries.setData(polyLineData);
 
     const tradeAnchorSeries = chart.addLineSeries({
       priceScaleId: 'trade-anchor',
@@ -332,7 +340,7 @@ export function ComparisonChart({
       lastValueVisible: false,
     });
     tradeAnchorSeries.priceScale().applyOptions({ visible: false });
-    tradeAnchorSeries.setData(toTradeAnchorData(trades));
+    tradeAnchorSeries.setData(tradeAnchorData);
 
     if (from !== null && to !== null) {
       chart.timeScale().setVisibleRange({
@@ -344,7 +352,7 @@ export function ComparisonChart({
     }
 
     let disposed = false;
-    const markers = toTradeOverlayMarkers(trades, btc, lastTrade);
+    const markers = tradeMarkers;
 
     // Map Amount của trade vào dải giá poly (last trade) để chiều cao chấm phản
     // ánh độ lớn: amount nhỏ nhất nằm sát đáy dải giá, lớn nhất sát đỉnh.
@@ -430,7 +438,17 @@ export function ComparisonChart({
       chart.remove();
       chartRef.current = null;
     };
-  }, [btc, lastTrade, side, from, to, trades]);
+  }, [
+    btcAreaData,
+    from,
+    lastTrade,
+    polyLineData,
+    side,
+    to,
+    tradeAnchorData,
+    tradeMarkers,
+    volumeData,
+  ]);
 
   return (
     <div className="chart-shell">

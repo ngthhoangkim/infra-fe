@@ -4,6 +4,7 @@ import {
   PolyMarketId,
 } from '@/types/poly-market.types';
 import { todayInVietnam } from '@/utils/datetime';
+import { cacheLongTtlSeconds, cacheWrap } from './cache';
 
 const FAMILIES_TABLE = 'poly_market_families';
 const MARKETS_TABLE = 'poly_markets';
@@ -93,6 +94,13 @@ interface SupabaseConfig {
 }
 
 export async function resolveAndUpsertPolyMarket(
+  input: ResolveMarketInput,
+): Promise<PolyMarket> {
+  const key = `poly-market:resolve:${input.marketId}:${input.marketDate ?? ''}:${input.timestamp ?? ''}`;
+  return cacheWrap(key, cacheLongTtlSeconds(), () => resolveAndUpsertPolyMarketRaw(input));
+}
+
+async function resolveAndUpsertPolyMarketRaw(
   input: ResolveMarketInput,
 ): Promise<PolyMarket> {
   const family = FAMILY_DEFS[input.marketId];

@@ -8,6 +8,7 @@ import {
   TradeRecord,
   TradeRow,
 } from '@/types/trade.types';
+import { cacheLongTtlSeconds, cacheWrap } from './cache';
 
 const TABLE = 'trade_orders';
 const ACCOUNTS_TABLE = 'trade_accounts';
@@ -138,6 +139,10 @@ export async function insertTrades(trades: TradeInput[]): Promise<number> {
 }
 
 export async function queryTradeAccounts(): Promise<TradeAccountRecord[]> {
+  return cacheWrap('trade:accounts', cacheLongTtlSeconds(), queryTradeAccountsRaw);
+}
+
+async function queryTradeAccountsRaw(): Promise<TradeAccountRecord[]> {
   const { baseUrl, key } = getSupabaseConfig();
   const params = new URLSearchParams({
     select: 'id,account,created_at',
@@ -174,8 +179,7 @@ export async function queryTrades(
 ): Promise<TradeRecord[]> {
   const { baseUrl, key } = getSupabaseConfig();
   const params = new URLSearchParams({
-    select:
-      'id,market_id,condition_id,account_id,outcome,price,amount,trade_timestamp,created_at,trade_accounts(account)',
+    select: tradeSelectColumns(),
     order: 'trade_timestamp.desc',
     limit: String(normalizeLimit(filters.limit)),
   });
@@ -185,6 +189,43 @@ export async function queryTrades(
     if (!accountId) return [];
     params.set('account_id', `eq.${accountId}`);
   }
+  if (filters.marketId) params.set('market_id', `eq.${filters.marketId}`);
+  if (filters.conditionId) params.set('condition_id', `eq.${filters.conditionId}`);
+  if (filters.outcome) params.set('outcome', `eq.${filters.outcome}`);
+  if (filters.from) params.set('trade_timestamp', `gte.${toIso(filters.from, 'from')}`);
+  if (filters.to) params.append('trade_timestamp', `lte.${toIso(filters.to, 'to')}`);
+
+  const response = await fetch(`${baseUrl}/rest/v1/${TABLE}?${params}`, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(
+      `Lỗi truy vấn Supabase (${response.status})${text ? `: ${text}` : ''}`,
+    );
+  }
+
+  const rows = (await response.json()) as TradeRow[];
+  return rows.map(mapTradeRow);
+}
+
+export async function queryTradesByAccountId(
+  filters: Omit<TradeFilters, 'account'> & { accountId?: string },
+): Promise<TradeRecord[]> {
+  const { baseUrl, key } = getSupabaseConfig();
+  const params = new URLSearchParams({
+    select: tradeSelectColumns(),
+    order: 'trade_timestamp.desc',
+    limit: String(normalizeLimit(filters.limit)),
+  });
+
+  if (filters.accountId) params.set('account_id', `eq.${filters.accountId}`);
   if (filters.marketId) params.set('market_id', `eq.${filters.marketId}`);
   if (filters.conditionId) params.set('condition_id', `eq.${filters.conditionId}`);
   if (filters.outcome) params.set('outcome', `eq.${filters.outcome}`);
@@ -314,6 +355,10 @@ function mapTradeRow(row: TradeRow): TradeRecord {
     timestamp: row.trade_timestamp,
     createdAt: row.created_at,
   };
+}
+
+function tradeSelectColumns(): string {
+  return 'id,market_id,condition_id,account_id,outcome,price,amount,trade_timestamp,created_at,trade_accounts(account)';
 }
 
 function requiredString(value: unknown, label: string): string {

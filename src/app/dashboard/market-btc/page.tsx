@@ -1,7 +1,14 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Card } from '@/components/common/Card';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Section } from '@/components/common/Section';
@@ -10,11 +17,9 @@ import { ComparisonChart } from '@/components/markets/ComparisonChart';
 import { MarketHeader } from '@/components/markets/MarketHeader';
 import { TradesTable } from '@/components/trades/TradesTable';
 import { HistoryMode, Side } from '@/constants/config';
-import { getChart } from '@/services/markets.service';
-import { resolvePolyMarket } from '@/services/poly-markets.service';
-import { getTradeAccounts, getTrades } from '@/services/trades.service';
+import { getBtcDashboard } from '@/services/dashboard.service';
+import { BtcDashboardErrors } from '@/types/dashboard.types';
 import { MarketChart } from '@/types/market.types';
-import { PolyMarket } from '@/types/poly-market.types';
 import {
   TradeAccount,
   TradeAccountRecord,
@@ -28,7 +33,6 @@ import {
 } from '@/utils/datetime';
 
 type AccountFilter = 'all' | TradeAccount;
-const BTC_DAILY_MARKET_ID = 'btc-updown-daily';
 
 export default function MarketBtcPage() {
   const searchParams = useSearchParams();
@@ -46,150 +50,48 @@ export default function MarketBtcPage() {
   const [minAmount, setMinAmount] = useState('');
 
   const [chart, setChart] = useState<MarketChart | null>(null);
-  const [polyMarket, setPolyMarket] = useState<PolyMarket | null>(null);
   const [trades, setTrades] = useState<TradeRecord[]>([]);
   const [accounts, setAccounts] = useState<TradeAccountRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [marketLoading, setMarketLoading] = useState(false);
-  const [tradesLoading, setTradesLoading] = useState(false);
-  const [accountsLoading, setAccountsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [marketError, setMarketError] = useState<string | null>(null);
-  const [tradesError, setTradesError] = useState<string | null>(null);
-  const marketWindowFrom =
-    historyMode === 'last_trade'
-      ? (polyMarket?.windowStartAt ?? undefined)
-      : undefined;
-  const marketWindowTo =
-    historyMode === 'last_trade'
-      ? (polyMarket?.windowEndAt ?? undefined)
-      : undefined;
+  const [dashboardErrors, setDashboardErrors] =
+    useState<BtcDashboardErrors>({});
+  const requestSeq = useRef(0);
 
-  // Lấy last-trade từ Polymarket API + giá BTC từ Binance.
-  const loadChart = useCallback(async () => {
+  const loadDashboard = useCallback(async () => {
+    const seq = requestSeq.current + 1;
+    requestSeq.current = seq;
     setLoading(true);
-    setError(null);
+    setDashboardErrors({});
     try {
-      const data = await getChart({
+      const data = await getBtcDashboard({
+        account,
         marketDate,
         side,
-        range: '1d',
         historyMode,
         windowStartTs: historyMode === '4h' ? windowStartTs : undefined,
-        conditionId:
-          historyMode === 'last_trade' ? polyMarket?.conditionId : undefined,
-        from: marketWindowFrom,
-        to: marketWindowTo,
       });
-      setChart(data);
-    } catch (e) {
-      setChart(null);
-      setError(e instanceof Error ? e.message : 'Lỗi tải dữ liệu chart');
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    historyMode,
-    marketDate,
-    marketWindowFrom,
-    marketWindowTo,
-    polyMarket?.conditionId,
-    side,
-    windowStartTs,
-  ]);
-
-  useEffect(() => {
-    loadChart();
-  }, [loadChart]);
-
-  const loadPolyMarket = useCallback(async () => {
-    if (historyMode === '4h') {
-      setPolyMarket(null);
-      setMarketLoading(false);
-      setMarketError(null);
-      return;
-    }
-
-    setMarketLoading(true);
-    setMarketError(null);
-    setPolyMarket(null);
-    try {
-      const data = await resolvePolyMarket({
-        marketId: BTC_DAILY_MARKET_ID,
-        marketDate,
-        timestamp: timestampForMarket(marketDate),
-      });
-      setPolyMarket(data);
-    } catch (e) {
-      setMarketError(
-        e instanceof Error ? e.message : 'Lỗi resolve Polymarket market',
-      );
-    } finally {
-      setMarketLoading(false);
-    }
-  }, [historyMode, marketDate]);
-
-  useEffect(() => {
-    loadPolyMarket();
-  }, [loadPolyMarket]);
-
-  const loadAccounts = useCallback(async () => {
-    setAccountsLoading(true);
-    try {
-      const data = await getTradeAccounts();
-      setAccounts(data);
-    } catch {
+      if (requestSeq.current !== seq) return;
+      setAccounts(data.accounts);
+      setChart(data.chart);
+      setTrades(data.trades);
+      setDashboardErrors(data.errors);
+    } catch (error) {
+      if (requestSeq.current !== seq) return;
       setAccounts([]);
-    } finally {
-      setAccountsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAccounts();
-  }, [loadAccounts]);
-
-  const loadTrades = useCallback(async () => {
-    const chartConditionId = chart?.conditionId ?? polyMarket?.conditionId;
-    if (
-      typeof chart?.from !== 'number' ||
-      typeof chart?.to !== 'number' ||
-      !chartConditionId
-    ) {
+      setChart(null);
       setTrades([]);
-      return;
-    }
-
-    setTradesLoading(true);
-    setTradesError(null);
-    try {
-      const data = await getTrades({
-        account: account === 'all' ? undefined : account,
-        conditionId: chartConditionId,
-        outcome: side,
-        from: new Date(chart.from).toISOString(),
-        to: new Date(chart.to).toISOString(),
-        limit: 500,
+      setDashboardErrors({
+        chart:
+          error instanceof Error ? error.message : 'Lỗi tải dữ liệu dashboard',
       });
-      setTrades(data);
-    } catch (e) {
-      setTrades([]);
-      setTradesError(e instanceof Error ? e.message : 'Lỗi tải dữ liệu trade');
     } finally {
-      setTradesLoading(false);
+      if (requestSeq.current === seq) setLoading(false);
     }
-  }, [
-    account,
-    chart?.from,
-    chart?.conditionId,
-    chart?.to,
-    polyMarket?.conditionId,
-    side,
-  ]);
+  }, [account, historyMode, marketDate, side, windowStartTs]);
 
   useEffect(() => {
-    loadTrades();
-  }, [loadTrades]);
+    loadDashboard();
+  }, [loadDashboard]);
 
   const lastTrade = chart?.lastTrade ?? [];
   const btc = chart?.btc ?? [];
@@ -236,7 +138,7 @@ export default function MarketBtcPage() {
           onSideChange={setSide}
           account={account}
           accounts={accounts}
-          accountsLoading={accountsLoading}
+          accountsLoading={loading && accounts.length === 0}
           onAccountChange={setAccount}
           minPrice={minPrice}
           onMinPriceChange={setMinPrice}
@@ -247,10 +149,10 @@ export default function MarketBtcPage() {
         />
       </Card>
 
-      {error && (
+      {dashboardErrors.chart && (
         <div style={{ marginTop: 16 }}>
           <Card>
-            <ErrorState message={error} onRetry={loadChart} />
+            <ErrorState message={dashboardErrors.chart} onRetry={loadDashboard} />
           </Card>
         </div>
       )}
@@ -260,30 +162,64 @@ export default function MarketBtcPage() {
           {loading && !chart ? (
             <Spinner />
           ) : (
-            <ComparisonChart
-              btc={btc}
-              lastTrade={lastTrade}
-              side={side}
-              from={chart?.from ?? null}
-              to={chart?.to ?? null}
-              trades={filteredTrades}
-            />
+            <LoadingPanel loading={loading}>
+              <ComparisonChart
+                btc={btc}
+                lastTrade={lastTrade}
+                side={side}
+                from={chart?.from ?? null}
+                to={chart?.to ?? null}
+                trades={filteredTrades}
+              />
+            </LoadingPanel>
           )}
         </Card>
       </Section>
 
       <Section title="Danh sách trade">
         <Card>
-          {marketError && <div className="poly-note err">{marketError}</div>}
-          {tradesError && <div className="poly-note err">{tradesError}</div>}
-          {tradesLoading ? (
+          {dashboardErrors.market && (
+            <div className="poly-note err">{dashboardErrors.market}</div>
+          )}
+          {dashboardErrors.accounts && (
+            <div className="poly-note err">{dashboardErrors.accounts}</div>
+          )}
+          {dashboardErrors.trades && (
+            <div className="poly-note err">{dashboardErrors.trades}</div>
+          )}
+          {loading && !chart ? (
             <Spinner />
           ) : (
-            <TradesTable trades={filteredTrades} totalTrades={trades.length} />
+            <LoadingPanel loading={loading}>
+              <TradesTable trades={filteredTrades} totalTrades={trades.length} />
+            </LoadingPanel>
           )}
         </Card>
       </Section>
     </main>
+  );
+}
+
+function LoadingPanel({
+  children,
+  loading,
+}: {
+  children: ReactNode;
+  loading: boolean;
+}) {
+  return (
+    <div className={`loading-panel ${loading ? 'is-loading' : ''}`}>
+      <div className="loading-panel__content">{children}</div>
+      {loading && (
+        <div
+          className="loading-panel__overlay"
+          role="status"
+          aria-label="Đang tải"
+        >
+          <span className="loading-dot" aria-hidden="true" />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -292,15 +228,6 @@ function parseNonNegativeFilter(value: string): number | null {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function timestampForMarket(marketDate: string): number {
-  const [year, month, day] = marketDate.split('-').map(Number);
-  if (!year || !month || !day) return Date.now();
-
-  // Until there is a time-of-day picker, resolve the demo intraday window at
-  // 10:00 Vietnam time so seeded mock data lines up with the selected date.
-  return Date.UTC(year, month - 1, day, 3, 0, 0, 0);
 }
 
 function defaultWindowStartTs(marketDate: string): number {

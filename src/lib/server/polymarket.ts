@@ -231,7 +231,7 @@ async function getTradesHistory(
 ): Promise<PolymarketPoint[]> {
   const key = `poly:trades:${conditionId}:${tokenId}:${fidelity}:${startTs ?? ''}:${endTs ?? ''}`;
   return cacheWrap(key, cacheTtlSeconds(), async () => {
-    const trades = await fetchAllTrades(conditionId, startTs);
+    const trades = await fetchAllTrades(conditionId, startTs, endTs);
     const forToken = trades.filter(
       (trade) =>
         trade.asset === tokenId &&
@@ -245,6 +245,7 @@ async function getTradesHistory(
 async function fetchAllTrades(
   conditionId: string,
   startTs?: number,
+  endTs?: number,
 ): Promise<RawTrade[]> {
   const all: RawTrade[] = [];
   let descending = true;
@@ -268,15 +269,25 @@ async function fetchAllTrades(
 
     const batch = ((await response.json()) ?? []) as RawTrade[];
     if (batch.length === 0) break;
-    all.push(...batch);
+    all.push(
+      ...batch.filter(
+        (trade) =>
+          (startTs === undefined || trade.timestamp >= startTs) &&
+          (endTs === undefined || trade.timestamp <= endTs),
+      ),
+    );
 
     if (page === 0 && batch.length > 1) {
       descending = batch[0].timestamp >= batch[batch.length - 1].timestamp;
     }
     if (batch.length < TRADES_PAGE) break;
 
-    const oldest = batch[batch.length - 1]?.timestamp ?? 0;
+    const firstTimestamp = batch[0]?.timestamp ?? 0;
+    const lastTimestamp = batch[batch.length - 1]?.timestamp ?? 0;
+    const oldest = descending ? lastTimestamp : firstTimestamp;
+    const newest = descending ? firstTimestamp : lastTimestamp;
     if (descending && startTs !== undefined && oldest < startTs) break;
+    if (!descending && endTs !== undefined && newest > endTs) break;
   }
 
   return all;
