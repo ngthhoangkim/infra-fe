@@ -16,7 +16,7 @@ import { Spinner } from '@/components/common/Spinner';
 import { ComparisonChart } from '@/components/markets/ComparisonChart';
 import { MarketHeader } from '@/components/markets/MarketHeader';
 import { TradesTable } from '@/components/trades/TradesTable';
-import { HistoryMode, Side } from '@/constants/config';
+import { HistoryMode, OutcomeFilter } from '@/constants/config';
 import { getBtcDashboard } from '@/services/dashboard.service';
 import { BtcDashboardErrors } from '@/types/dashboard.types';
 import { MarketChart } from '@/types/market.types';
@@ -44,7 +44,7 @@ export default function MarketBtcPage() {
   const [windowStartTs, setWindowStartTs] = useState<number>(() =>
     defaultWindowStartTs(datePartsInNewYork(new Date())),
   );
-  const [side, setSide] = useState<Side>('up');
+  const [outcome, setOutcome] = useState<OutcomeFilter>('all');
   const [account, setAccount] = useState<AccountFilter>('all');
   const [minPrice, setMinPrice] = useState('');
   const [minAmount, setMinAmount] = useState('');
@@ -66,7 +66,7 @@ export default function MarketBtcPage() {
       const data = await getBtcDashboard({
         account,
         marketDate,
-        side,
+        outcome,
         historyMode,
         windowStartTs: historyMode === '4h' ? windowStartTs : undefined,
       });
@@ -87,7 +87,7 @@ export default function MarketBtcPage() {
     } finally {
       if (requestSeq.current === seq) setLoading(false);
     }
-  }, [account, historyMode, marketDate, side, windowStartTs]);
+  }, [account, historyMode, marketDate, outcome, windowStartTs]);
 
   useEffect(() => {
     loadDashboard();
@@ -134,8 +134,8 @@ export default function MarketBtcPage() {
           historyMode={historyMode}
           windowStartTs={windowStartTs}
           onFourHourWindowChange={handleFourHourWindowChange}
-          side={side}
-          onSideChange={setSide}
+          outcome={outcome}
+          onOutcomeChange={setOutcome}
           account={account}
           accounts={accounts}
           accountsLoading={loading && accounts.length === 0}
@@ -166,7 +166,9 @@ export default function MarketBtcPage() {
               <ComparisonChart
                 btc={btc}
                 lastTrade={lastTrade}
-                side={side}
+                lastTradeUp={chart?.lastTradeUp ?? []}
+                lastTradeDown={chart?.lastTradeDown ?? []}
+                outcome={outcome}
                 from={chart?.from ?? null}
                 to={chart?.to ?? null}
                 trades={filteredTrades}

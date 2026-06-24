@@ -2,13 +2,18 @@ import {
   TRADE_OUTCOMES,
   TradeAccount,
   TradeAccountRecord,
+  TradeAccountSummary,
   TradeFilters,
   TradeInput,
   TradeOutcome,
   TradeRecord,
   TradeRow,
+  TradeSummaryPrice,
+  TradeSummaryResponse,
+  TradeSummaryTotals,
 } from '@/types/trade.types';
 import { cacheLongTtlSeconds, cacheWrap } from './cache';
+import { getPolymarketLivePricesByConditionId } from './polymarket';
 
 const TABLE = 'trade_orders';
 const ACCOUNTS_TABLE = 'trade_accounts';
@@ -252,6 +257,101 @@ export async function queryTradesByAccountId(
   return rows.map(mapTradeRow);
 }
 
+export async function queryTradeSummary(
+  filters: Pick<TradeFilters, 'conditionId' | 'marketId' | 'from' | 'to'> = {},
+): Promise<TradeSummaryResponse> {
+  const conditionId =
+    filters.conditionId ?? (await queryLatestConditionId(filters.marketId));
+  const trades =
+    filters.from || filters.to
+      ? await queryTrades({
+          from: filters.from,
+          to: filters.to,
+          limit: MAX_LIMIT,
+        })
+      : conditionId
+        ? await queryTrades({ conditionId, limit: MAX_LIMIT })
+        : filters.marketId
+          ? await queryTrades({ marketId: filters.marketId, limit: MAX_LIMIT })
+          : [];
+
+  let prices: TradeSummaryPrice = { up: null, down: null, source: null };
+  if (conditionId) {
+    try {
+      prices = await getPolymarketLivePricesByConditionId(conditionId);
+    } catch (error) {
+      prices = {
+        up: null,
+        down: null,
+        source: null,
+        error:
+          error instanceof Error ? error.message : 'Không lấy được live price',
+      };
+    }
+  }
+
+  return aggregateTradeSummary(trades, prices, conditionId, {
+    from: filters.from ?? null,
+    to: filters.to ?? null,
+  });
+}
+
+export function aggregateTradeSummary(
+  trades: TradeRecord[],
+  prices: TradeSummaryPrice,
+  conditionId: string | null,
+  window: { from: string | null; to: string | null } = {
+    from: null,
+    to: null,
+  },
+): TradeSummaryResponse {
+  const buckets = new Map<TradeAccount, TradeAccountSummary>();
+  let marketId: string | null = null;
+
+  for (const trade of trades) {
+    marketId = marketId ?? trade.marketId ?? null;
+    const current = buckets.get(trade.account) ?? emptyAccountSummary(trade.account);
+    const price = Number(trade.price);
+    const amount = Number(trade.amount);
+    current.tradeCount += 1;
+
+    if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(amount)) {
+      current.invalidTradeCount += 1;
+      buckets.set(trade.account, current);
+      continue;
+    }
+
+    const shares = amount / price;
+    if (trade.outcome === 'up') {
+      current.upShares += shares;
+      current.upCost += amount;
+    } else {
+      current.downShares += shares;
+      current.downCost += amount;
+    }
+    buckets.set(trade.account, current);
+  }
+
+  const rows = [...buckets.values()].map((row) => finalizeAccountSummary(row, prices));
+  rows.sort((a, b) => {
+    if (a.pnl === null && b.pnl === null) return a.account.localeCompare(b.account);
+    if (a.pnl === null) return 1;
+    if (b.pnl === null) return -1;
+    return Math.abs(b.pnl) - Math.abs(a.pnl);
+  });
+
+  return {
+    conditionId,
+    marketId,
+    from: window.from,
+    to: window.to,
+    generatedAt: new Date().toISOString(),
+    prices,
+    totals: summarizeRows(rows),
+    rows,
+  };
+}
+
 export function parseTradeFilters(searchParams: URLSearchParams): TradeFilters {
   const account = optionalString(searchParams, 'account');
   const outcome = optionalString(searchParams, 'outcome');
@@ -354,6 +454,115 @@ function mapTradeRow(row: TradeRow): TradeRecord {
     tradeTimestamp: row.trade_timestamp,
     timestamp: row.trade_timestamp,
     createdAt: row.created_at,
+  };
+}
+
+async function queryLatestConditionId(marketId?: string): Promise<string | null> {
+  const { baseUrl, key } = getSupabaseConfig();
+  const params = new URLSearchParams({
+    select: 'condition_id',
+    condition_id: 'not.is.null',
+    order: 'trade_timestamp.desc',
+    limit: '1',
+  });
+  if (marketId) params.set('market_id', `eq.${marketId}`);
+
+  const response = await fetch(`${baseUrl}/rest/v1/${TABLE}?${params}`, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(
+      `Lỗi truy vấn Supabase (${response.status})${text ? `: ${text}` : ''}`,
+    );
+  }
+
+  const rows = (await response.json()) as { condition_id?: string | null }[];
+  return rows[0]?.condition_id ?? null;
+}
+
+function emptyAccountSummary(account: TradeAccount): TradeAccountSummary {
+  return {
+    account,
+    upShares: 0,
+    downShares: 0,
+    upCost: 0,
+    downCost: 0,
+    upAvgPrice: null,
+    downAvgPrice: null,
+    totalCost: 0,
+    liveValue: null,
+    pnl: null,
+    tradeCount: 0,
+    invalidTradeCount: 0,
+  };
+}
+
+function finalizeAccountSummary(
+  row: TradeAccountSummary,
+  prices: TradeSummaryPrice,
+): TradeAccountSummary {
+  const totalCost = row.upCost + row.downCost;
+  const upAvgPrice = row.upShares > 0 ? row.upCost / row.upShares : null;
+  const downAvgPrice = row.downShares > 0 ? row.downCost / row.downShares : null;
+  const liveValue =
+    prices.up !== null && prices.down !== null
+      ? row.upShares * prices.up + row.downShares * prices.down
+      : null;
+
+  return {
+    ...row,
+    upAvgPrice,
+    downAvgPrice,
+    totalCost,
+    liveValue,
+    pnl: liveValue === null ? null : liveValue - totalCost,
+  };
+}
+
+function summarizeRows(rows: TradeAccountSummary[]): TradeSummaryTotals {
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.upShares += row.upShares;
+      acc.downShares += row.downShares;
+      acc.totalCost += row.totalCost;
+      acc.tradeCount += row.tradeCount;
+      acc.invalidTradeCount += row.invalidTradeCount;
+      if (row.liveValue === null || row.pnl === null) {
+        acc.hasPendingPrice = true;
+      } else {
+        acc.liveValue += row.liveValue;
+        acc.pnl += row.pnl;
+      }
+      return acc;
+    },
+    {
+      upShares: 0,
+      downShares: 0,
+      totalCost: 0,
+      liveValue: 0,
+      pnl: 0,
+      tradeCount: 0,
+      invalidTradeCount: 0,
+      hasPendingPrice: false,
+    },
+  );
+
+  return {
+    accounts: rows.length,
+    upShares: totals.upShares,
+    downShares: totals.downShares,
+    totalCost: totals.totalCost,
+    liveValue: totals.hasPendingPrice ? null : totals.liveValue,
+    pnl: totals.hasPendingPrice ? null : totals.pnl,
+    tradeCount: totals.tradeCount,
+    invalidTradeCount: totals.invalidTradeCount,
   };
 }
 

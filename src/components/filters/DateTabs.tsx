@@ -34,17 +34,20 @@ export function DateTabs({ selected, onSelect }: DateTabsProps) {
   const dates = useMemo(() => buildDateOptions(selected), [selected]);
 
   return (
-    <Select value={selected} onValueChange={onSelect}>
-      <SelectTrigger className="w-[160px]">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {dates.map((date) => (
-          <SelectItem key={date} value={date}>
-            {formatDate(date)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="outlined-field">
+      <span className="outlined-field__label">Date</span>
+      <Select value={selected} onValueChange={onSelect}>
+        <SelectTrigger className="outlined-field__control w-[160px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {dates.map((date) => (
+            <SelectItem key={date} value={date}>
+              {formatDate(date)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

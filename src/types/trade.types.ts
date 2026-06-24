@@ -61,3 +61,47 @@ export interface TradeAccountRecord {
   account: TradeAccount;
   createdAt: string;
 }
+
+export interface TradeSummaryPrice {
+  up: number | null;
+  down: number | null;
+  source: 'gamma' | 'clob' | null;
+  error?: string;
+}
+
+export interface TradeAccountSummary {
+  account: TradeAccount;
+  upShares: number;
+  downShares: number;
+  upCost: number;
+  downCost: number;
+  upAvgPrice: number | null;
+  downAvgPrice: number | null;
+  totalCost: number;
+  liveValue: number | null;
+  pnl: number | null;
+  tradeCount: number;
+  invalidTradeCount: number;
+}
+
+export interface TradeSummaryTotals {
+  accounts: number;
+  upShares: number;
+  downShares: number;
+  totalCost: number;
+  liveValue: number | null;
+  pnl: number | null;
+  tradeCount: number;
+  invalidTradeCount: number;
+}
+
+export interface TradeSummaryResponse {
+  conditionId: string | null;
+  marketId: string | null;
+  from: string | null;
+  to: string | null;
+  generatedAt: string;
+  prices: TradeSummaryPrice;
+  totals: TradeSummaryTotals;
+  rows: TradeAccountSummary[];
+}

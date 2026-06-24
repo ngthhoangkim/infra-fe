@@ -1,4 +1,5 @@
 import { MarketChart } from './market.types';
+import { OutcomeFilter } from '@/constants/config';
 import { PolyMarket } from './poly-market.types';
 import { TradeAccountRecord, TradeRecord } from './trade.types';
 
@@ -30,6 +31,7 @@ export interface BtcDashboardQuery {
   account?: string;
   historyMode?: 'last_trade' | '4h';
   marketDate: string;
+  outcome?: OutcomeFilter;
   side?: 'up' | 'down';
   windowStartTs?: number;
 }

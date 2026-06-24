@@ -1,6 +1,5 @@
 import { DateTabs } from '@/components/filters/DateTabs';
 import { FourHourWindowSelect } from '@/components/filters/FourHourWindowSelect';
-import { SideToggle } from '@/components/filters/SideToggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -10,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { HistoryMode, Side } from '@/constants/config';
+import { HistoryMode, OUTCOME_LABELS, OutcomeFilter } from '@/constants/config';
 import { TradeAccount, TradeAccountRecord } from '@/types/trade.types';
 import { formatDate } from '@/utils/datetime';
 
@@ -25,8 +24,8 @@ interface MarketHeaderProps {
     marketDate: string;
     windowStartTs: number;
   }) => void;
-  side: Side;
-  onSideChange: (side: Side) => void;
+  outcome: OutcomeFilter;
+  onOutcomeChange: (outcome: OutcomeFilter) => void;
   account: AccountFilter;
   accounts: TradeAccountRecord[];
   accountsLoading: boolean;
@@ -45,8 +44,8 @@ export function MarketHeader({
   historyMode,
   windowStartTs,
   onFourHourWindowChange,
-  side,
-  onSideChange,
+  outcome,
+  onOutcomeChange,
   account,
   accounts,
   accountsLoading,
@@ -64,42 +63,68 @@ export function MarketHeader({
         Ngày {formatDate(marketDate)} · BTC Up or Down
       </h1>
       <div className="market-header__controls">
-        <SideToggle value={side} onChange={onSideChange} />
-        <Select
-          value={account}
-          disabled={accountsLoading}
-          onValueChange={(value) => onAccountChange(value as AccountFilter)}
-        >
-          <SelectTrigger className="w-[160px] text-foreground">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            {accounts.map((item) => (
-              <SelectItem key={item.id} value={item.account}>
-                {item.account}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          value={minPrice}
-          type="number"
-          min="0"
-          step="0.01"
-          className="w-[120px]"
-          placeholder="Min price"
-          onChange={(event) => onMinPriceChange(event.target.value)}
-        />
-        <Input
-          value={minAmount}
-          type="number"
-          min="0"
-          step="0.01"
-          className="w-[130px]"
-          placeholder="Min amount"
-          onChange={(event) => onMinAmountChange(event.target.value)}
-        />
+        <div className="outlined-field">
+          <span className="outlined-field__label">Outcome</span>
+          <Select
+            value={outcome}
+            onValueChange={(value) => onOutcomeChange(value as OutcomeFilter)}
+          >
+            <SelectTrigger className="outlined-field__control w-[130px] text-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(OUTCOME_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="outlined-field">
+          <span className="outlined-field__label">Account</span>
+          <Select
+            value={account}
+            disabled={accountsLoading}
+            onValueChange={(value) => onAccountChange(value as AccountFilter)}
+          >
+            <SelectTrigger className="outlined-field__control w-[160px] text-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              {accounts.map((item) => (
+                <SelectItem key={item.id} value={item.account}>
+                  {item.account}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="outlined-field">
+          <span className="outlined-field__label">Min price</span>
+          <Input
+            value={minPrice}
+            type="number"
+            min="0"
+            step="0.01"
+            className="outlined-field__control w-[120px]"
+            placeholder="All"
+            onChange={(event) => onMinPriceChange(event.target.value)}
+          />
+        </div>
+        <div className="outlined-field">
+          <span className="outlined-field__label">Min amount</span>
+          <Input
+            value={minAmount}
+            type="number"
+            min="0"
+            step="0.01"
+            className="outlined-field__control w-[130px]"
+            placeholder="All"
+            onChange={(event) => onMinAmountChange(event.target.value)}
+          />
+        </div>
         {hasTradeFilters && (
           <Button
             type="button"

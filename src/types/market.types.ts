@@ -36,6 +36,8 @@ export interface MarketChart {
   to: number | null;
   binanceInterval: string | null;
   lastTrade: LastTradePoint[];
+  lastTradeUp?: LastTradePoint[];
+  lastTradeDown?: LastTradePoint[];
   btc: BtcPoint[];
 }
 

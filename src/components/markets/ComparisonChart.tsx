@@ -15,7 +15,7 @@ import type { Time } from 'lightweight-charts';
 import { BtcPoint, LastTradePoint } from '@/types/market.types';
 import { TradeRecord } from '@/types/trade.types';
 import { formatTime } from '@/utils/datetime';
-import { Side } from '@/constants/config';
+import { OutcomeFilter } from '@/constants/config';
 import { formatPrice, formatUsd } from '@/utils/format';
 
 const CHART_TIME_OFFSET_MS = 0;
@@ -23,7 +23,9 @@ const CHART_TIME_OFFSET_MS = 0;
 interface ComparisonChartProps {
   btc: BtcPoint[];
   lastTrade: LastTradePoint[];
-  side: Side;
+  lastTradeUp?: LastTradePoint[];
+  lastTradeDown?: LastTradePoint[];
+  outcome: OutcomeFilter;
   from: number | null;
   to: number | null;
   trades?: TradeRecord[];
@@ -236,7 +238,9 @@ function chartTimeToMs(time: Time): number {
 export function ComparisonChart({
   btc,
   lastTrade,
-  side,
+  lastTradeUp = [],
+  lastTradeDown = [],
+  outcome,
   from,
   to,
   trades = [],
@@ -246,11 +250,24 @@ export function ComparisonChart({
   const overlayRef = useRef<HTMLDivElement>(null);
   const btcAreaData = useMemo(() => toBtcAreaData(btc, from, to), [btc, from, to]);
   const volumeData = useMemo(() => toVolumeData(btc), [btc]);
-  const polyLineData = useMemo(() => toPolyLine(lastTrade), [lastTrade]);
+  const upTradePoints = useMemo(
+    () => (outcome === 'all' ? lastTradeUp : outcome === 'up' ? lastTrade : []),
+    [lastTrade, lastTradeUp, outcome],
+  );
+  const downTradePoints = useMemo(
+    () => (outcome === 'all' ? lastTradeDown : outcome === 'down' ? lastTrade : []),
+    [lastTrade, lastTradeDown, outcome],
+  );
+  const tradeReferencePoints = useMemo(
+    () => (outcome === 'all' ? [...lastTradeUp, ...lastTradeDown] : lastTrade),
+    [lastTrade, lastTradeDown, lastTradeUp, outcome],
+  );
+  const upLineData = useMemo(() => toPolyLine(upTradePoints), [upTradePoints]);
+  const downLineData = useMemo(() => toPolyLine(downTradePoints), [downTradePoints]);
   const tradeAnchorData = useMemo(() => toTradeAnchorData(trades), [trades]);
   const tradeMarkers = useMemo(
-    () => toTradeOverlayMarkers(trades, btc, lastTrade),
-    [btc, lastTrade, trades],
+    () => toTradeOverlayMarkers(trades, btc, tradeReferencePoints),
+    [btc, tradeReferencePoints, trades],
   );
 
   useEffect(() => {
@@ -320,16 +337,32 @@ export function ComparisonChart({
     });
     volumeSeries.setData(volumeData);
 
-    const polyColor = side === 'up' ? '#16c784' : '#ea3943';
-    const polySeries = chart.addLineSeries({
-      priceScaleId: 'left',
-      color: polyColor,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      title: side === 'up' ? 'Up %' : 'Down %',
-    });
-    polySeries.setData(polyLineData);
+    const upSeries =
+      upLineData.length > 0
+        ? chart.addLineSeries({
+            priceScaleId: 'left',
+            color: '#16c784',
+            lineWidth: 2,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            title: 'Up %',
+          })
+        : null;
+    upSeries?.setData(upLineData);
+
+    const downSeries =
+      downLineData.length > 0
+        ? chart.addLineSeries({
+            priceScaleId: 'left',
+            color: '#ea3943',
+            lineWidth: 2,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            title: 'Down %',
+          })
+        : null;
+    downSeries?.setData(downLineData);
+    const polySeries = upSeries ?? downSeries;
 
     const tradeAnchorSeries = chart.addLineSeries({
       priceScaleId: 'trade-anchor',
@@ -356,7 +389,7 @@ export function ComparisonChart({
 
     // Map Amount của trade vào dải giá poly (last trade) để chiều cao chấm phản
     // ánh độ lớn: amount nhỏ nhất nằm sát đáy dải giá, lớn nhất sát đỉnh.
-    const polyPrices = lastTrade.map((p) => p.price).filter(Number.isFinite);
+    const polyPrices = tradeReferencePoints.map((p) => p.price).filter(Number.isFinite);
     const minPoly = polyPrices.length ? Math.min(...polyPrices) : 0;
     const maxPoly = polyPrices.length ? Math.max(...polyPrices) : 0;
     const amounts = markers.map((m) => m.amount);
@@ -386,11 +419,12 @@ export function ComparisonChart({
           Math.min(container.clientWidth - 20, leftAxisWidth + x),
         );
         // Chiều cao theo Amount, neo vào trục giá poly/last trade (trục trái).
-        const amountY = polySeries.priceToCoordinate(
-          amountToPolyPrice(marker.amount) as Parameters<
-            typeof polySeries.priceToCoordinate
-          >[0],
-        );
+        const amountY =
+          polySeries?.priceToCoordinate(
+            amountToPolyPrice(marker.amount) as Parameters<
+              NonNullable<typeof polySeries>['priceToCoordinate']
+            >[0],
+          ) ?? null;
         const baseY = amountY ?? axisY;
         // Nudge nhẹ khi nhiều trade trùng khung thời gian để không chồng khít.
         const top = Math.max(
@@ -440,13 +474,13 @@ export function ComparisonChart({
     };
   }, [
     btcAreaData,
+    downLineData,
     from,
-    lastTrade,
-    polyLineData,
-    side,
     to,
     tradeAnchorData,
     tradeMarkers,
+    tradeReferencePoints,
+    upLineData,
     volumeData,
   ]);
 

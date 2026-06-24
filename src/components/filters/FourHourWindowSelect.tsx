@@ -93,28 +93,31 @@ export function FourHourWindowSelect({
   const selected = optionValue(marketDate, windowStartTs);
 
   return (
-    <Select
-      value={selected}
-      onValueChange={(value) => {
-        const option = options.find((item) => item.value === value);
-        if (option) {
-          onSelect({
-            marketDate: option.marketDate,
-            windowStartTs: option.windowStartTs,
-          });
-        }
-      }}
-    >
-      <SelectTrigger className="w-[220px]">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="outlined-field">
+      <span className="outlined-field__label">Window</span>
+      <Select
+        value={selected}
+        onValueChange={(value) => {
+          const option = options.find((item) => item.value === value);
+          if (option) {
+            onSelect({
+              marketDate: option.marketDate,
+              windowStartTs: option.windowStartTs,
+            });
+          }
+        }}
+      >
+        <SelectTrigger className="outlined-field__control w-[220px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

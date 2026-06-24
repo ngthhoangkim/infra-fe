@@ -1,4 +1,8 @@
 import {
+  OutcomeFilter,
+  Side,
+} from '@/constants/config';
+import {
   BtcDashboardErrors,
   BtcDashboardPayload,
   BtcDashboardQuery,
@@ -21,7 +25,7 @@ export async function getBtcDashboard(
   const errors: BtcDashboardErrors = {};
   const timings: BtcDashboardTimings = {};
   const historyMode = query.historyMode ?? 'last_trade';
-  const side = query.side ?? 'up';
+  const outcome = query.outcome ?? query.side ?? 'all';
 
   const accountsPromise = timed('accounts', timings, queryTradeAccounts).catch(
     (error) => {
@@ -50,14 +54,14 @@ export async function getBtcDashboard(
   ]);
 
   const chart = await timed('chart', timings, () =>
-    loadChart(query, side, historyMode, polyMarket),
+    loadChart(query, outcome, historyMode, polyMarket),
   ).catch((error) => {
     errors.chart = errorMessage(error, 'Lỗi tải dữ liệu chart');
     return null;
   });
 
   const trades = await timed('trades', timings, () =>
-    loadTrades(query, side, accounts, chart, polyMarket),
+    loadTrades(query, outcome, accounts, chart, polyMarket),
   ).catch((error) => {
     errors.trades = errorMessage(error, 'Lỗi tải dữ liệu trade');
     return [] as TradeRecord[];
@@ -78,7 +82,36 @@ export async function getBtcDashboard(
 
 async function loadChart(
   query: BtcDashboardQuery,
-  side: 'up' | 'down',
+  outcome: OutcomeFilter,
+  historyMode: 'last_trade' | '4h',
+  polyMarket: PolyMarket | null,
+): Promise<MarketChart> {
+  if (outcome !== 'all') {
+    return loadSideChart(query, outcome, historyMode, polyMarket);
+  }
+
+  const [upChart, downChart] = await Promise.all([
+    loadSideChart(query, 'up', historyMode, polyMarket),
+    loadSideChart(query, 'down', historyMode, polyMarket),
+  ]);
+  const baseChart = upChart.btc.length || upChart.lastTrade.length ? upChart : downChart;
+  const lastTrade = [...upChart.lastTrade, ...downChart.lastTrade].sort(
+    (a, b) => a.time - b.time,
+  );
+
+  return {
+    ...baseChart,
+    side: 'all',
+    conditionId: upChart.conditionId ?? downChart.conditionId,
+    lastTrade,
+    lastTradeUp: upChart.lastTrade,
+    lastTradeDown: downChart.lastTrade,
+  };
+}
+
+function loadSideChart(
+  query: BtcDashboardQuery,
+  side: Side,
   historyMode: 'last_trade' | '4h',
   polyMarket: PolyMarket | null,
 ): Promise<MarketChart> {
@@ -103,7 +136,7 @@ async function loadChart(
 
 async function loadTrades(
   query: BtcDashboardQuery,
-  side: 'up' | 'down',
+  outcome: OutcomeFilter,
   accounts: TradeAccountRecord[],
   chart: MarketChart | null,
   polyMarket: PolyMarket | null,
@@ -126,7 +159,7 @@ async function loadTrades(
   return queryTradesByAccountId({
     accountId,
     conditionId,
-    outcome: side,
+    outcome: outcome === 'all' ? undefined : outcome,
     from: new Date(chart.from).toISOString(),
     to: new Date(chart.to).toISOString(),
     limit: TRADE_LIMIT,

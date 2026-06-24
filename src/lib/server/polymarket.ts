@@ -56,6 +56,10 @@ interface RawGammaMarket {
   conditionId?: string;
   clobTokenIds?: string;
   outcomes?: string;
+  outcomePrices?: string;
+  bestBid?: number | string;
+  bestAsk?: number | string;
+  lastTradePrice?: number | string;
   eventStartTime?: string;
   startDate?: string;
   endDate?: string;
@@ -84,6 +88,17 @@ interface RawTrade {
   asset: string;
   price: number | string;
   timestamp: number;
+}
+
+interface RawClobBook {
+  bids?: { price: string; size: string }[];
+  asks?: { price: string; size: string }[];
+}
+
+export interface PolymarketLivePrices {
+  up: number | null;
+  down: number | null;
+  source: 'gamma' | 'clob';
 }
 
 export async function getPolymarketHistory(
@@ -146,6 +161,80 @@ export async function getPolymarketHistory(
     endTs,
     points,
   );
+}
+
+export async function getPolymarketLivePricesByConditionId(
+  conditionId: string,
+): Promise<PolymarketLivePrices> {
+  const market = await fetchGammaMarketByConditionId(conditionId);
+  if (!market) {
+    throw new Error(`Không tìm thấy market Polymarket cho conditionId "${conditionId}"`);
+  }
+
+  const gammaPrices = resolveGammaOutcomePrices(market);
+  if (gammaPrices.up !== null || gammaPrices.down !== null) {
+    return { ...gammaPrices, source: 'gamma' };
+  }
+
+  const tokenIds = parseJsonArray(market.clobTokenIds ?? '[]');
+  const outcomes = parseJsonArray(market.outcomes ?? '[]');
+  const upToken = tokenIds[pickOutcomeIndex(outcomes, 'up')];
+  const downToken = tokenIds[pickOutcomeIndex(outcomes, 'down')];
+  const [up, down] = await Promise.all([
+    upToken ? getClobBookMid(upToken) : Promise.resolve(null),
+    downToken ? getClobBookMid(downToken) : Promise.resolve(null),
+  ]);
+
+  if (up === null && down === null) {
+    throw new Error('Không lấy được live price từ Gamma hoặc CLOB');
+  }
+
+  return { up, down, source: 'clob' };
+}
+
+function resolveGammaOutcomePrices(market: RawGammaMarket): {
+  up: number | null;
+  down: number | null;
+} {
+  const outcomes = parseJsonArray(market.outcomes ?? '[]');
+  const prices = parseJsonArray(market.outcomePrices ?? '[]').map((value) =>
+    Number(value),
+  );
+  const up = prices[pickOutcomeIndex(outcomes, 'up')];
+  const down = prices[pickOutcomeIndex(outcomes, 'down')];
+
+  return {
+    up: Number.isFinite(up) ? up : null,
+    down: Number.isFinite(down) ? down : null,
+  };
+}
+
+async function getClobBookMid(tokenId: string): Promise<number | null> {
+  const baseUrl = polymarketBaseUrl('POLYMARKET_CLOB_BASE_URL', 'clob');
+  const params = new URLSearchParams({ token_id: tokenId });
+  const response = await fetch(`${baseUrl}/book?${params}`, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) return null;
+
+  const book = (await response.json()) as RawClobBook;
+  const bid = bestBookPrice(book.bids, 'bid');
+  const ask = bestBookPrice(book.asks, 'ask');
+  if (bid !== null && ask !== null) return (bid + ask) / 2;
+  return bid ?? ask;
+}
+
+function bestBookPrice(
+  levels: { price: string; size: string }[] | undefined,
+  side: 'bid' | 'ask',
+): number | null {
+  const prices = (levels ?? [])
+    .map((level) => Number(level.price))
+    .filter((price) => Number.isFinite(price));
+  if (prices.length === 0) return null;
+  return side === 'bid' ? Math.max(...prices) : Math.min(...prices);
 }
 
 function resolveWindow(
@@ -465,6 +554,24 @@ async function fetchGammaMarket(
     }
   }
 
+  const response = await fetch(`${baseUrl}/markets?${params}`, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gamma API lỗi (${response.status})`);
+  }
+
+  const data = (await response.json()) as RawGammaMarket[] | RawGammaMarket;
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function fetchGammaMarketByConditionId(
+  conditionId: string,
+): Promise<RawGammaMarket | undefined> {
+  const baseUrl = polymarketBaseUrl('POLYMARKET_GAMMA_BASE_URL', 'gamma');
+  const params = new URLSearchParams({ condition_ids: conditionId });
   const response = await fetch(`${baseUrl}/markets?${params}`, {
     headers: { Accept: 'application/json' },
     cache: 'no-store',

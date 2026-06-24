@@ -7,6 +7,7 @@ import { HISTORY_MODE_LABELS, HISTORY_MODES, HistoryMode } from '@/constants/con
 
 const NAV_ITEMS = [
   { href: '/dashboard/market-btc', label: 'BTC Market' },
+  { href: '/dashboard/trades', label: 'Summary' },
   { href: '/dashboard/test-trade', label: 'Test' },
 ];
 

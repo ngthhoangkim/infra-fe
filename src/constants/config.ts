@@ -20,6 +20,15 @@ export const SIDE_LABELS: Record<Side, string> = {
   down: 'Down',
 };
 
+export const OUTCOMES = ['all', 'up', 'down'] as const;
+export type OutcomeFilter = (typeof OUTCOMES)[number];
+
+export const OUTCOME_LABELS: Record<OutcomeFilter, string> = {
+  all: 'All',
+  up: 'Up',
+  down: 'Down',
+};
+
 export const DEFAULT_RANGE: Range = '1d';
 
 export const HISTORY_MODES = ['last_trade', '4h'] as const;

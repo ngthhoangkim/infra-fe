@@ -11,7 +11,7 @@ export function getBtcDashboard(
     account: query.account === 'all' ? undefined : query.account,
     historyMode: query.historyMode,
     marketDate: query.marketDate,
-    side: query.side,
+    outcome: query.outcome,
     windowStartTs: query.windowStartTs,
   });
 }

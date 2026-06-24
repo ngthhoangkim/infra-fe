@@ -5,6 +5,7 @@ import {
   TradeFilters,
   TradeInput,
   TradeRecord,
+  TradeSummaryResponse,
 } from '@/types/trade.types';
 
 export function getTrades(filters: TradeFilters = {}): Promise<TradeRecord[]> {
@@ -21,6 +22,20 @@ export function getTrades(filters: TradeFilters = {}): Promise<TradeRecord[]> {
 
 export function getTradeAccounts(): Promise<TradeAccountRecord[]> {
   return apiGet<TradeAccountRecord[]>('/api/trade-accounts');
+}
+
+export function getTradeSummary(filters: {
+  conditionId?: string;
+  marketId?: string;
+  from?: string;
+  to?: string;
+} = {}): Promise<TradeSummaryResponse> {
+  return apiGet<TradeSummaryResponse>('/api/trades/summary', {
+    conditionId: filters.conditionId,
+    marketId: filters.marketId,
+    from: filters.from,
+    to: filters.to,
+  });
 }
 
 export function createTrades(trades: TradeInput[]): Promise<{ inserted: number }> {
