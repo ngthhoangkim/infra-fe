@@ -29,8 +29,9 @@ import {
 } from '@/constants/config';
 import { getBtcDashboard } from '@/services/dashboard.service';
 import { resolvePolyMarket } from '@/services/poly-markets.service';
-import { getTradeSummary } from '@/services/trades.service';
+import { getTradeAccounts, getTradeSummary } from '@/services/trades.service';
 import {
+  TradeAccountRecord,
   TradeAccountSummary,
   TradeSummaryResponse,
   TradeSummaryTotals,
@@ -54,8 +55,10 @@ export default function TradesSummaryPage() {
   const [windowStartTs, setWindowStartTs] = useState(() =>
     defaultWindowStartTs(datePartsInNewYork(new Date())),
   );
+  const [accounts, setAccounts] = useState<TradeAccountRecord[]>([]);
   const [accountFilter, setAccountFilter] = useState('all');
   const [loading, setLoading] = useState(false);
+  const [accountsLoading, setAccountsLoading] = useState(false);
   const [error, setError] = useState('');
   const requestSeq = useRef(0);
   const hasLoaded = summary !== null || error !== '';
@@ -100,19 +103,27 @@ export default function TradesSummaryPage() {
   }, [loadSummary]);
 
   useEffect(() => {
+    let active = true;
+    setAccountsLoading(true);
+    getTradeAccounts()
+      .then((data) => {
+        if (active) setAccounts(data);
+      })
+      .catch(() => {
+        if (active) setAccounts([]);
+      })
+      .finally(() => {
+        if (active) setAccountsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const timer = window.setInterval(loadSummary, REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [loadSummary]);
-
-  useEffect(() => {
-    if (
-      accountFilter !== 'all' &&
-      summary &&
-      !summary.rows.some((row) => row.account === accountFilter)
-    ) {
-      setAccountFilter('all');
-    }
-  }, [accountFilter, summary]);
 
   const handleModeChange = (mode: HistoryMode) => {
     setHistoryMode(mode);
@@ -168,15 +179,19 @@ export default function TradesSummaryPage() {
             )}
             <div className="outlined-field">
               <span className="outlined-field__label">Account</span>
-              <Select value={accountFilter} onValueChange={setAccountFilter}>
+              <Select
+                value={accountFilter}
+                disabled={accountsLoading}
+                onValueChange={setAccountFilter}
+              >
                 <SelectTrigger className="outlined-field__control w-[160px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
-                  {(summary?.rows ?? []).map((row) => (
-                    <SelectItem key={row.account} value={row.account}>
-                      {row.account}
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.account}>
+                      {account.account}
                     </SelectItem>
                   ))}
                 </SelectContent>
