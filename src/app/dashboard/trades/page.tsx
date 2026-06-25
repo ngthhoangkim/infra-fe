@@ -227,7 +227,12 @@ export default function TradesSummaryPage() {
               <SummaryMetric label="Accounts" value={formatCount(visibleTotals.accounts)} />
               <SummaryMetric label="Up shares" value={formatShares(visibleTotals.upShares)} />
               <SummaryMetric label="Down shares" value={formatShares(visibleTotals.downShares)} />
-              <SummaryMetric label="Total cost" value={`$${formatUsd(visibleTotals.totalCost)}`} />
+              <SummaryMetric label="Total cost" value={formatUsd(visibleTotals.totalCost)} />
+              <SummaryMetric
+                label="Profit"
+                value={formatNullableSignedUsd(visibleTotals.pnl)}
+                tone={profitTone(visibleTotals.pnl)}
+              />
             </div>
           ) : (
             <div className="state">No trades for this market</div>
@@ -283,6 +288,7 @@ function TradeSummaryTable({ rows }: { rows: TradeAccountSummary[] }) {
             <th>Down Shares</th>
             <th>Down Avg</th>
             <th>Total Cost</th>
+            <th>Profit</th>
           </tr>
         </thead>
         <tbody>
@@ -293,7 +299,10 @@ function TradeSummaryTable({ rows }: { rows: TradeAccountSummary[] }) {
               <td>{formatNullablePrice(row.upAvgPrice)}</td>
               <td>{formatShares(row.downShares)}</td>
               <td>{formatNullablePrice(row.downAvgPrice)}</td>
-              <td>${formatUsd(row.totalCost)}</td>
+              <td>{formatUsd(row.totalCost)}</td>
+              <td className={profitClass(row.pnl)}>
+                {formatNullableSignedUsd(row.pnl)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -317,17 +326,35 @@ function formatNullablePrice(value: number | null): string {
   return value === null ? 'N/A' : formatPrice(value);
 }
 
+function formatNullableSignedUsd(value: number | null): string {
+  if (value === null) return 'N/A';
+  const sign = value >= 0 ? '+' : '-';
+  return `${sign}${formatUsd(Math.abs(value))}`;
+}
+
+function profitTone(value: number | null): 'up' | 'down' | 'neutral' {
+  if (value === null || value === 0) return 'neutral';
+  return value > 0 ? 'up' : 'down';
+}
+
+function profitClass(value: number | null): string {
+  const tone = profitTone(value);
+  if (tone === 'neutral') return '';
+  return `pnl is-${tone}`;
+}
+
 function summarizeVisibleRows(rows: TradeAccountSummary[]): TradeSummaryTotals {
-  return rows.reduce<TradeSummaryTotals>(
-    (totals, row) => ({
-      accounts: totals.accounts + 1,
-      upShares: totals.upShares + row.upShares,
-      downShares: totals.downShares + row.downShares,
-      totalCost: totals.totalCost + row.totalCost,
+  const totals = rows.reduce<TradeSummaryTotals & { hasMissingProfit: boolean }>(
+    (acc, row) => ({
+      accounts: acc.accounts + 1,
+      upShares: acc.upShares + row.upShares,
+      downShares: acc.downShares + row.downShares,
+      totalCost: acc.totalCost + row.totalCost,
       liveValue: null,
-      pnl: null,
-      tradeCount: totals.tradeCount + row.tradeCount,
-      invalidTradeCount: totals.invalidTradeCount + row.invalidTradeCount,
+      pnl: row.pnl === null ? acc.pnl : (acc.pnl ?? 0) + row.pnl,
+      tradeCount: acc.tradeCount + row.tradeCount,
+      invalidTradeCount: acc.invalidTradeCount + row.invalidTradeCount,
+      hasMissingProfit: acc.hasMissingProfit || row.pnl === null,
     }),
     {
       accounts: 0,
@@ -335,11 +362,17 @@ function summarizeVisibleRows(rows: TradeAccountSummary[]): TradeSummaryTotals {
       downShares: 0,
       totalCost: 0,
       liveValue: null,
-      pnl: null,
+      pnl: 0,
       tradeCount: 0,
       invalidTradeCount: 0,
+      hasMissingProfit: false,
     },
   );
+
+  return {
+    ...totals,
+    pnl: totals.hasMissingProfit ? null : totals.pnl,
+  };
 }
 
 async function resolveSelectedMarketWindow(
