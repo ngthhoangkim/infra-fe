@@ -102,6 +102,7 @@ export interface TradeSummaryResponse {
   to: string | null;
   generatedAt: string;
   prices: TradeSummaryPrice;
+  result: TradeOutcome | null;
   totals: TradeSummaryTotals;
   rows: TradeAccountSummary[];
 }

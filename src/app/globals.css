@@ -303,31 +303,6 @@ body {
   border: 4px solid #ef4444;
 }
 
-.trade-marker__pointer {
-  align-items: center;
-  background: currentColor;
-  border: 2px solid #fff;
-  border-radius: 999px;
-  bottom: -5px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
-  display: inline-flex;
-  font-size: 10px;
-  height: 18px;
-  justify-content: center;
-  left: 50%;
-  position: absolute;
-  transform: translateX(-50%);
-  width: 18px;
-}
-
-.trade-marker--up .trade-marker__pointer {
-  color: #16c784;
-}
-
-.trade-marker--down .trade-marker__pointer {
-  color: #ea3943;
-}
-
 .trade-marker__tooltip {
   background: rgba(15, 23, 42, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -614,7 +589,7 @@ body {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 

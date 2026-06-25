@@ -485,9 +485,20 @@ export function aggregateTradeSummary(
     to: window.to,
     generatedAt: new Date().toISOString(),
     prices,
+    result: resolveMarketResult(prices, window.to),
     totals: summarizeRows(rows),
     rows,
   };
+}
+
+function resolveMarketResult(
+  prices: TradeSummaryPrice,
+  to: string | null,
+): TradeOutcome | null {
+  if (!to || !isHistoricalWindow(to ?? undefined)) return null;
+  if (prices.up === null || prices.down === null) return null;
+  if (prices.up === prices.down) return null;
+  return prices.up > prices.down ? 'up' : 'down';
 }
 
 export function parseTradeFilters(searchParams: URLSearchParams): TradeFilters {

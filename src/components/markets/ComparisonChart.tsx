@@ -196,13 +196,7 @@ function nearestBtcClose(timeMs: number, btc: BtcPoint[]): number | null {
 }
 
 function initials(account: string): string {
-  return account
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  return account.trim().charAt(0).toUpperCase() || '?';
 }
 
 function formatTradeTime(value: string): string {
@@ -446,10 +440,6 @@ export function ComparisonChart({
           <span>Amount: ${formatUsd(marker.amount)}</span>
         `;
 
-        const pointer = document.createElement('span');
-        pointer.className = 'trade-marker__pointer';
-        pointer.textContent = marker.outcome === 'up' ? '▲' : '▼';
-        bubble.appendChild(pointer);
         bubble.appendChild(tooltip);
         overlay.appendChild(bubble);
       });

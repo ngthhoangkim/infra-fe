@@ -151,6 +151,7 @@ export default function TradesSummaryPage() {
             <div className="topbar__note">
               {historyMode === '4h' ? '4H window' : 'Daily market'}
               {summary?.prices.source ? ` · price: ${summary.prices.source}` : ''}
+              {summary?.result ? ` · result: ${formatResult(summary.result)}` : ''}
             </div>
           </div>
           <div className="summary-filter">
@@ -228,6 +229,11 @@ export default function TradesSummaryPage() {
               <SummaryMetric label="Up shares" value={formatShares(visibleTotals.upShares)} />
               <SummaryMetric label="Down shares" value={formatShares(visibleTotals.downShares)} />
               <SummaryMetric label="Total cost" value={formatUsd(visibleTotals.totalCost)} />
+              <SummaryMetric
+                label="Win"
+                value={summary.result ? formatResult(summary.result) : 'N/A'}
+                tone={summary.result ?? 'neutral'}
+              />
               <SummaryMetric
                 label="Profit"
                 value={formatNullableSignedUsd(visibleTotals.pnl)}
@@ -330,6 +336,10 @@ function formatNullableSignedUsd(value: number | null): string {
   if (value === null) return 'N/A';
   const sign = value >= 0 ? '+' : '-';
   return `${sign}${formatUsd(Math.abs(value))}`;
+}
+
+function formatResult(result: 'up' | 'down'): string {
+  return result === 'up' ? 'Up' : 'Down';
 }
 
 function profitTone(value: number | null): 'up' | 'down' | 'neutral' {
