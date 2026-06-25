@@ -29,12 +29,14 @@ export function getTradeSummary(filters: {
   marketId?: string;
   from?: string;
   to?: string;
+  historyMode?: 'last_trade' | '4h';
 } = {}): Promise<TradeSummaryResponse> {
   return apiGet<TradeSummaryResponse>('/api/trades/summary', {
     conditionId: filters.conditionId,
     marketId: filters.marketId,
     from: filters.from,
     to: filters.to,
+    historyMode: filters.historyMode,
   });
 }
 

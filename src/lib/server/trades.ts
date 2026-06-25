@@ -14,12 +14,14 @@ import {
 } from '@/types/trade.types';
 import { cacheLongTtlSeconds, cacheWrap } from './cache';
 import { getPolymarketLivePricesByConditionId } from './polymarket';
+import { PriceHistoryTable, queryPriceHistory } from './supabase-rest';
 
 const TABLE = 'trade_orders';
 const ACCOUNTS_TABLE = 'trade_accounts';
 const PRICE_HISTORY_TABLE = 'price_history_last_trade';
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
+const HISTORICAL_PRICE_WINDOW_BUFFER_MS = 2 * 60 * 1000;
 const VIETNAM_OFFSET_MINUTES = 7 * 60;
 const CONDITION_LOOKUP_WINDOWS: Record<string, number> = {
   'btc-updown-5m': 6 * 60 * 1000,
@@ -258,7 +260,9 @@ export async function queryTradesByAccountId(
 }
 
 export async function queryTradeSummary(
-  filters: Pick<TradeFilters, 'conditionId' | 'marketId' | 'from' | 'to'> = {},
+  filters: Pick<TradeFilters, 'conditionId' | 'marketId' | 'from' | 'to'> & {
+    historyMode?: 'last_trade' | '4h';
+  } = {},
 ): Promise<TradeSummaryResponse> {
   const conditionId =
     filters.conditionId ?? (await queryLatestConditionId(filters.marketId));
@@ -277,23 +281,157 @@ export async function queryTradeSummary(
 
   let prices: TradeSummaryPrice = { up: null, down: null, source: null };
   if (conditionId) {
-    try {
-      prices = await getPolymarketLivePricesByConditionId(conditionId);
-    } catch (error) {
-      prices = {
-        up: null,
-        down: null,
-        source: null,
-        error:
-          error instanceof Error ? error.message : 'Không lấy được live price',
-      };
-    }
+    prices = await resolveSummaryPrices(
+      conditionId,
+      filters.to,
+      filters.historyMode ?? 'last_trade',
+    );
   }
 
   return aggregateTradeSummary(trades, prices, conditionId, {
     from: filters.from ?? null,
     to: filters.to ?? null,
   });
+}
+
+async function resolveSummaryPrices(
+  conditionId: string,
+  to: string | undefined,
+  historyMode: 'last_trade' | '4h',
+): Promise<TradeSummaryPrice> {
+  const useHistoricalFirst = isHistoricalWindow(to);
+
+  if (useHistoricalFirst) {
+    const historical = await queryHistoricalSummaryPrices(
+      conditionId,
+      to,
+      historyMode,
+    );
+    if (hasBothPrices(historical)) return historical;
+  }
+
+  try {
+    return await getPolymarketLivePricesByConditionId(conditionId);
+  } catch (error) {
+    const historical = await queryHistoricalSummaryPrices(
+      conditionId,
+      to,
+      historyMode,
+    );
+    if (hasBothPrices(historical)) return historical;
+
+    return {
+      up: historical.up,
+      down: historical.down,
+      source: historical.source,
+      error:
+        historical.error ??
+        (error instanceof Error ? error.message : 'Không lấy được live price'),
+    };
+  }
+}
+
+async function queryHistoricalSummaryPrices(
+  conditionId: string,
+  to: string | undefined,
+  historyMode: 'last_trade' | '4h',
+): Promise<TradeSummaryPrice> {
+  const table = priceHistoryTableForMode(historyMode);
+  const fallbackTable = historyMode === '4h'
+    ? 'price_history_last_trade'
+    : 'price_history_4h_last_trade';
+  const primary = await queryHistoricalSummaryPricesFromTable(
+    conditionId,
+    to,
+    table,
+  );
+  if (hasBothPrices(primary)) return primary;
+
+  const fallback = await queryHistoricalSummaryPricesFromTable(
+    conditionId,
+    to,
+    fallbackTable,
+  );
+  if (hasBothPrices(fallback)) return fallback;
+
+  return {
+    up: primary.up ?? fallback.up,
+    down: primary.down ?? fallback.down,
+    source: primary.source ?? fallback.source,
+    error: primary.error ?? fallback.error,
+  };
+}
+
+async function queryHistoricalSummaryPricesFromTable(
+  conditionId: string,
+  to: string | undefined,
+  table: PriceHistoryTable,
+): Promise<TradeSummaryPrice> {
+  try {
+    const [up, down] = await Promise.all([
+      queryLatestHistoricalPrice(conditionId, 'up', to, table),
+      queryLatestHistoricalPrice(conditionId, 'down', to, table),
+    ]);
+    const inferredUp = up ?? (down === null ? null : 1 - down);
+    const inferredDown = down ?? (up === null ? null : 1 - up);
+
+    return {
+      up: inferredUp,
+      down: inferredDown,
+      source: inferredUp !== null || inferredDown !== null ? 'supabase_history' : null,
+    };
+  } catch (error) {
+    return {
+      up: null,
+      down: null,
+      source: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Không lấy được historical price từ Supabase',
+    };
+  }
+}
+
+async function queryLatestHistoricalPrice(
+  conditionId: string,
+  side: TradeOutcome,
+  to: string | undefined,
+  table: PriceHistoryTable,
+): Promise<number | null> {
+  const params = new URLSearchParams({
+    select: 'price,created_at,condition_id,side',
+    condition_id: `eq.${conditionId}`,
+    side: `eq.${side}`,
+    order: 'created_at.desc',
+    limit: '1',
+  });
+  if (to) params.set('created_at', `lte.${to}`);
+
+  const rows = await queryPriceHistory(params, table);
+  const price = Number(rows[0]?.price);
+  return Number.isFinite(price) ? price : null;
+}
+
+function priceHistoryTableForMode(
+  historyMode: 'last_trade' | '4h',
+): PriceHistoryTable {
+  return historyMode === '4h'
+    ? 'price_history_4h_last_trade'
+    : 'price_history_last_trade';
+}
+
+function hasBothPrices(prices: TradeSummaryPrice): boolean {
+  return prices.up !== null && prices.down !== null;
+}
+
+function isHistoricalWindow(to: string | undefined): boolean {
+  if (!to) return false;
+  const toMs = new Date(to).getTime();
+  return (
+    Number.isFinite(toMs) &&
+    toMs < Date.now() - HISTORICAL_PRICE_WINDOW_BUFFER_MS
+  );
 }
 
 export function aggregateTradeSummary(

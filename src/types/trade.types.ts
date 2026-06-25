@@ -65,7 +65,7 @@ export interface TradeAccountRecord {
 export interface TradeSummaryPrice {
   up: number | null;
   down: number | null;
-  source: 'gamma' | 'clob' | null;
+  source: 'gamma' | 'clob' | 'supabase_history' | null;
   error?: string;
 }
 

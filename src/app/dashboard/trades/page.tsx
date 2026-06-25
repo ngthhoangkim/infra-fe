@@ -86,7 +86,7 @@ export default function TradesSummaryPage() {
         marketDate,
         windowStartTs,
       );
-      const data = await getTradeSummary(selectedMarket);
+      const data = await getTradeSummary({ ...selectedMarket, historyMode });
       if (requestSeq.current !== seq) return;
       setSummary(data);
     } catch (err) {

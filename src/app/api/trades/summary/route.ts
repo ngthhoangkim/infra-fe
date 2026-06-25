@@ -10,13 +10,27 @@ export async function GET(request: NextRequest) {
     const marketId = optionalString(request.nextUrl.searchParams, 'marketId');
     const from = optionalString(request.nextUrl.searchParams, 'from');
     const to = optionalString(request.nextUrl.searchParams, 'to');
-    const summary = await queryTradeSummary({ conditionId, marketId, from, to });
+    const historyMode = optionalHistoryMode(request.nextUrl.searchParams);
+    const summary = await queryTradeSummary({
+      conditionId,
+      marketId,
+      from,
+      to,
+      historyMode,
+    });
     return NextResponse.json(summary);
   } catch (error) {
     return jsonError(
       error instanceof Error ? error.message : 'Không lấy được summary trade',
     );
   }
+}
+
+function optionalHistoryMode(
+  searchParams: URLSearchParams,
+): 'last_trade' | '4h' | undefined {
+  const value = optionalString(searchParams, 'historyMode');
+  return value === 'last_trade' || value === '4h' ? value : undefined;
 }
 
 function optionalString(
