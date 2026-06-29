@@ -95,6 +95,16 @@ export interface TradeSummaryTotals {
   invalidTradeCount: number;
 }
 
+export interface TradeMarketSummary {
+  conditionId: string | null;
+  marketId: string | null;
+  summaryDate: string;
+  prices: TradeSummaryPrice;
+  result: TradeOutcome | null;
+  totals: TradeSummaryTotals;
+  rows: TradeAccountSummary[];
+}
+
 export interface TradeSummaryResponse {
   conditionId: string | null;
   marketId: string | null;
@@ -105,4 +115,5 @@ export interface TradeSummaryResponse {
   result: TradeOutcome | null;
   totals: TradeSummaryTotals;
   rows: TradeAccountSummary[];
+  overallMarkets: TradeMarketSummary[];
 }

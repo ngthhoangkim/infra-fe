@@ -13,10 +13,11 @@ import { currentDailyMarketDate, formatDate } from '@/utils/datetime';
 interface DateTabsProps {
   selected: string;
   onSelect: (date: string) => void;
+  includeAll?: boolean;
 }
 
 function buildDateOptions(selected: string): string[] {
-  const dates = new Set<string>([selected]);
+  const dates = new Set<string>(selected === 'all' ? [] : [selected]);
   const currentMarketDate = currentDailyMarketDate();
   const [year, month, day] = currentMarketDate.split('-').map(Number);
   const latest = new Date(Date.UTC(year, month - 1, day));
@@ -30,7 +31,7 @@ function buildDateOptions(selected: string): string[] {
   return [...dates].sort((a, b) => b.localeCompare(a));
 }
 
-export function DateTabs({ selected, onSelect }: DateTabsProps) {
+export function DateTabs({ selected, onSelect, includeAll = false }: DateTabsProps) {
   const dates = useMemo(() => buildDateOptions(selected), [selected]);
 
   return (
@@ -41,6 +42,7 @@ export function DateTabs({ selected, onSelect }: DateTabsProps) {
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
+          {includeAll && <SelectItem value="all">All date</SelectItem>}
           {dates.map((date) => (
             <SelectItem key={date} value={date}>
               {formatDate(date)}

@@ -5,6 +5,7 @@ import {
   TradeAccountSummary,
   TradeFilters,
   TradeInput,
+  TradeMarketSummary,
   TradeOutcome,
   TradeRecord,
   TradeRow,
@@ -23,6 +24,7 @@ const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
 const HISTORICAL_PRICE_WINDOW_BUFFER_MS = 2 * 60 * 1000;
 const VIETNAM_OFFSET_MINUTES = 7 * 60;
+const NEW_YORK_TIME_ZONE = 'America/New_York';
 const CONDITION_LOOKUP_WINDOWS: Record<string, number> = {
   'btc-updown-5m': 6 * 60 * 1000,
   'btc-updown-15m': 16 * 60 * 1000,
@@ -265,19 +267,19 @@ export async function queryTradeSummary(
   } = {},
 ): Promise<TradeSummaryResponse> {
   const conditionId =
-    filters.conditionId ?? (await queryLatestConditionId(filters.marketId));
-  const trades =
-    filters.from || filters.to
-      ? await queryTrades({
-          from: filters.from,
-          to: filters.to,
-          limit: MAX_LIMIT,
-        })
-      : conditionId
-        ? await queryTrades({ conditionId, limit: MAX_LIMIT })
-        : filters.marketId
-          ? await queryTrades({ marketId: filters.marketId, limit: MAX_LIMIT })
-          : [];
+    filters.conditionId ??
+    (filters.marketId ? await queryLatestConditionId(filters.marketId) : null);
+  const tradeFilters: TradeFilters = {
+    from: filters.from,
+    to: filters.to,
+    limit: MAX_LIMIT,
+  };
+  if (conditionId) {
+    tradeFilters.conditionId = conditionId;
+  } else if (filters.marketId) {
+    tradeFilters.marketId = filters.marketId;
+  }
+  const trades = await queryTrades(tradeFilters);
 
   let prices: TradeSummaryPrice = { up: null, down: null, source: null };
   if (conditionId) {
@@ -288,10 +290,28 @@ export async function queryTradeSummary(
     );
   }
 
-  return aggregateTradeSummary(trades, prices, conditionId, {
+  const window = {
     from: filters.from ?? null,
     to: filters.to ?? null,
-  });
+  };
+  const summary = aggregateTradeSummary(trades, prices, conditionId, window);
+  const overallTrades =
+    filters.from || filters.to
+      ? await queryTrades({
+          from: filters.from,
+          to: filters.to,
+          limit: MAX_LIMIT,
+        })
+      : trades;
+
+  return {
+    ...summary,
+    overallMarkets: await aggregateMarketSummaries(
+      overallTrades,
+      window,
+      filters.historyMode ?? 'last_trade',
+    ),
+  };
 }
 
 async function resolveSummaryPrices(
@@ -488,14 +508,105 @@ export function aggregateTradeSummary(
     result: resolveMarketResult(prices, window.to),
     totals: summarizeRows(rows),
     rows,
+    overallMarkets: [],
   };
+}
+
+async function aggregateMarketSummaries(
+  trades: TradeRecord[],
+  window: { from: string | null; to: string | null },
+  historyMode: 'last_trade' | '4h',
+): Promise<TradeMarketSummary[]> {
+  const buckets = new Map<string, TradeRecord[]>();
+
+  for (const trade of trades) {
+    const key = trade.conditionId ?? trade.marketId;
+    if (!key) continue;
+    const current = buckets.get(key) ?? [];
+    current.push(trade);
+    buckets.set(key, current);
+  }
+
+  const summaries = await Promise.all(
+    [...buckets.values()].map(async (marketTrades) => {
+      const conditionId = marketTrades[0]?.conditionId ?? null;
+      const prices = conditionId
+        ? await resolveMarketSummaryPrices(
+            conditionId,
+            window.to ?? undefined,
+            historyMode,
+          )
+        : ({ up: null, down: null, source: null } satisfies TradeSummaryPrice);
+      const summary = aggregateTradeSummary(
+        marketTrades,
+        prices,
+        conditionId,
+        window,
+      );
+
+      return {
+        conditionId: summary.conditionId,
+        marketId: summary.marketId,
+        summaryDate: summaryDateForMarketTrades(marketTrades),
+        prices: summary.prices,
+        result: summary.result,
+        totals: summary.totals,
+        rows: summary.rows,
+      } satisfies TradeMarketSummary;
+    }),
+  );
+
+  return summaries.sort((a, b) => {
+    const aPnl = a.totals.pnl;
+    const bPnl = b.totals.pnl;
+    if (aPnl === null && bPnl === null) {
+      return (a.marketId ?? a.conditionId ?? '').localeCompare(
+        b.marketId ?? b.conditionId ?? '',
+      );
+    }
+    if (aPnl === null) return 1;
+    if (bPnl === null) return -1;
+    return Math.abs(bPnl) - Math.abs(aPnl);
+  });
+}
+
+async function resolveMarketSummaryPrices(
+  conditionId: string,
+  to: string | undefined,
+  historyMode: 'last_trade' | '4h',
+): Promise<TradeSummaryPrice> {
+  if (to) return resolveSummaryPrices(conditionId, to, historyMode);
+
+  const historical = await queryHistoricalSummaryPrices(
+    conditionId,
+    undefined,
+    historyMode,
+  );
+  if (hasBothPrices(historical)) return historical;
+
+  return resolveSummaryPrices(conditionId, undefined, historyMode);
+}
+
+function summaryDateForMarketTrades(trades: TradeRecord[]): string {
+  const timestamps = trades
+    .map((trade) => new Date(trade.tradeTimestamp).getTime())
+    .filter(Number.isFinite);
+  const timestamp = timestamps.length > 0 ? Math.min(...timestamps) : Date.now();
+
+  return new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: NEW_YORK_TIME_ZONE,
+    year: 'numeric',
+  }).format(new Date(timestamp));
 }
 
 function resolveMarketResult(
   prices: TradeSummaryPrice,
   to: string | null,
 ): TradeOutcome | null {
-  if (!to || !isHistoricalWindow(to ?? undefined)) return null;
+  if (!to && prices.source !== 'supabase_history') return null;
+  if (to && !isHistoricalWindow(to ?? undefined)) return null;
   if (prices.up === null || prices.down === null) return null;
   if (prices.up === prices.down) return null;
   return prices.up > prices.down ? 'up' : 'down';
