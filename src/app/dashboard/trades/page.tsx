@@ -3,7 +3,6 @@
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import {
   Fragment,
-  type WheelEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -448,11 +447,6 @@ function TradeSummaryTable({
         <thead>
           <tr>
             <th>Account</th>
-            <th>Up Shares</th>
-            <th>Up Avg</th>
-            <th>Down Shares</th>
-            <th>Down Avg</th>
-            <th>Total Cost</th>
             <th>PnL</th>
             <th>ROI</th>
             <th>Sharpe Ratio</th>
@@ -470,11 +464,6 @@ function TradeSummaryTable({
                 }}
               >
                 <td>{row.account}</td>
-                <td>{formatShares(row.summary.upShares)}</td>
-                <td>{formatNullablePrice(row.summary.upAvgPrice)}</td>
-                <td>{formatShares(row.summary.downShares)}</td>
-                <td>{formatNullablePrice(row.summary.downAvgPrice)}</td>
-                <td>{formatUsd(row.summary.totalCost)}</td>
                 <td className={profitClass(row.summary.pnl)}>
                   {formatNullableSignedUsd(row.summary.pnl)}
                 </td>
@@ -508,7 +497,7 @@ function TradeSummaryTable({
               </tr>
               {canExpand && expandedAccounts.has(row.account) && (
                 <tr className="summary-breakdown-row">
-                  <td colSpan={11}>
+                  <td colSpan={6}>
                     <AccountDailyBreakdown rows={row.dailyBreakdown} />
                   </td>
                 </tr>
@@ -527,11 +516,7 @@ function AccountDailyBreakdown({ rows }: { rows: DailyBreakdownRow[] }) {
   }
 
   return (
-    <div
-      className="summary-breakdown"
-      onTouchMove={(event) => event.stopPropagation()}
-      onWheel={handleBreakdownWheel}
-    >
+    <div className="summary-breakdown">
       <table className="table summary-breakdown__table">
         <thead>
           <tr>
@@ -571,21 +556,6 @@ function AccountDailyBreakdown({ rows }: { rows: DailyBreakdownRow[] }) {
         </tbody>
       </table>
     </div>
-  );
-}
-
-function handleBreakdownWheel(event: WheelEvent<HTMLDivElement>) {
-  const element = event.currentTarget;
-  const maxTop = element.scrollHeight - element.clientHeight;
-
-  event.preventDefault();
-  event.stopPropagation();
-
-  if (maxTop <= 0) return;
-
-  element.scrollTop = Math.max(
-    0,
-    Math.min(maxTop, element.scrollTop + event.deltaY),
   );
 }
 
